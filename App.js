@@ -15,9 +15,9 @@ const courseMaterialRoutes = require('./routes/courseMaterialRoute');
 const myCourseRoutes = require('./routes/Mycourseroute');
 const { addMeetingToCourse, getCourseMeetings } = require('./controllers/courseMaterialController');
 const CertificateRoutes = require('./routes/Certificateroute');
-const { issueCertificate, verifyCertificate, bulkIssueCertificates, getCertificateStats, getStudentCertificates } = require('./controllers/Certificatecontroller');
 const Mylearning= require('./routes/Mylearningroute');
-const { processPayment } = require('./controllers/paymentController');
+const QuestionRoutes = require('./routes/questionRoutes');
+const { downloadCertificate } = require('./controllers/Certificatecontroller');
 
 // Initialize express app
 const app = express();
@@ -36,6 +36,114 @@ app.use(cors(corsOptions));
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
+// Add these debug routes to app.js
+app.get('/api/debug/auth-check', async (req, res) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mypassword');
+    const Auth = require('./models/authdata');
+    const user = await Auth.findById(decoded.id || decoded.userId || decoded._id);
+    
+    res.json({
+      success: true,
+      tokenInfo: decoded,
+      user: user ? {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      } : null
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+// Add this to app.js
+app.get('/api/debug/course-categories', async (req, res) => {
+  try {
+    const CourseMaterial = require('./models/courseMaterialdata');
+    const courses = await CourseMaterial.find({});
+    
+    const categories = [...new Set(courses.map(course => course.course_category))];
+    
+    res.json({
+      success: true,
+      categories: categories,
+      courses: courses.map(course => ({
+        id: course._id,
+        title: course.course_title,
+        category: course.course_category,
+        status: course.status
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Add this to app.js for debugging courses
+app.get('/api/debug/all-courses', async (req, res) => {
+  try {
+    const CourseMaterial = require('./models/courseMaterialdata');
+    const allCourses = await CourseMaterial.find({});
+    
+    console.log('📚 All courses in database:', allCourses.length);
+    
+    res.json({
+      success: true,
+      count: allCourses.length,
+      courses: allCourses.map(course => ({
+        id: course._id,
+        title: course.course_title,
+        category: course.course_category,
+        status: course.status,
+        hasTitle: !!course.course_title,
+        hasCategory: !!course.course_category
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/debug/courses-public', async (req, res) => {
+  try {
+    const CourseMaterial = require('./models/courseMaterialdata');
+    const courses = await CourseMaterial.find({ status: 'published' })
+      .select('_id course_title course_category course_description')
+      .sort({ course_title: 1 });
+
+    res.json({
+      success: true,
+      count: courses.length,
+      data: courses
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // Basic route for testing
 app.get('/', (req, res) => {
@@ -83,13 +191,6 @@ app.get('/', (req, res) => {
       updateMeetingInfo: '/api/courses/:course_id/meetings/:meeting_id',
       deleteMeeting: '/api/courses/:course_id/meetings/:meeting_id',
       reorderMeetings: '/api/courses/:course_id/reorder-meetings',
-      issueCertificate: '/api/certificates/issue',
-      bulkIssueCertificates: '/api/certificates/bulk-issue',
-      getAllCertificates: '/api/certificates/',
-      getCertificateById: '/api/certificates/:id',
-      getCertificateStats: '/api/certificates/stats',
-      revokeCertificate: '/api/certificates/:id/revoke',
-      getStudentCertificates: '/api/certificates/student/:student_id',
       getMyLearningCourses: '/api/my-learning/courses',
       getCategoryMaterials: '/api/my-learning/courses/:category',
       markMaterialCompleted: '/api/my-learning/progress/:category/:material_type/:material_id',
@@ -97,7 +198,20 @@ app.get('/', (req, res) => {
       processPayment: '/api/payment/process',
       verifyPayment: '/api/payment/verify/:paymentId',
       getPaymentStatus: '/api/payment/status/:student_email',
-      debugStudentData: '/api/my-learning/debug'
+      debugStudentData: '/api/my-learning/debug',
+      uploadCertificate: '/api/certificates/upload',
+      getAllCertificates: '/api/certificates',
+      getCertificateById: '/api/certificates/:id',
+      downloadCertificate: '/api/certificates/:id/download',
+      revokeCertificate: '/api/certificates/:id/revoke',
+      createQuiz: '/api/quiz/teacher/quizzes',
+      getTeacherQuizzes: '/api/quiz/teacher/quizzes',
+      getQuizDetails: '/api/quiz/teacher/quizzes/:quiz_id',
+      updateQuizStatus: '/api/quiz/teacher/quizzes/:quiz_id/status',
+      updateQuizSettings: '/api/quiz/teacher/quizzes/:quiz_id/settings',
+      getQuizAttempts: '/api/quiz/teacher/quizzes/:quiz_id/attempts',
+      getStudentQuizzes: '/api/quiz/student/quizzes',
+      startQuizAttempt: '/api/quiz/student/quizzes/:quiz_id/start',
     }
   });
 });
@@ -111,18 +225,18 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/teacher', teacherRoutes);
 app.use('/api/admin', teacherManagementRoutes);
 app.use('/api/course-materials', courseMaterialRoutes);
-// FIXED: Changed from '/api/my-courses' to '/api/teacher/my-courses'
 app.use('/api/teacher/my-courses', myCourseRoutes);
 app.use('/api/certificates', CertificateRoutes);
 app.use('/api/my-learning', Mylearning);
-
+app.use('/api/quiz', QuestionRoutes);
+app.use('/api/certificates', CertificateRoutes);
 app.use('/uploads', express.static('uploads'));
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port http://localhost:${PORT}`);
   console.log(`Course Registration Backend Active`);
-  console.log(`http://localhost:${PORT}`);
 });
 
 module.exports = app;
