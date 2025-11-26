@@ -2,16 +2,20 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect('mongodb://localhost:27017/course', {
+    if (!process.env.MONGODB_URI) {
+      console.error('MONGODB_URI is not defined in environment variables');
+      process.exit(1);
+    }
+
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    
+
     console.log(`MongoDB Connected: ${conn.connection.host}`);
-    return conn;
   } catch (error) {
-    console.error('Database connection error:', error.message);
-    process.exit(1);
+    console.error('Database connection failed:', error.message);
+    process.exit(1);   // This will make Render show a clear error if something is wrong
   }
 };
 
