@@ -21,12 +21,23 @@ const { downloadCertificate } = require('./controllers/Certificatecontroller');
 
 // Initialize express app
 const app = express();
-connectDB();
+connectDB();s
 
-// CORS configuration
+// CORS configuration - FIXED for production + local
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://edulearn-93zy.onrender.com'
+];
+
 const corsOptions = {
-  origin: 'http://localhost:5173', // Your frontend URL
-  credentials: true, // Allow credentials (cookies)
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 };
