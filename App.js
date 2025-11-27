@@ -21,7 +21,7 @@ const { downloadCertificate } = require('./controllers/Certificatecontroller');
 
 // Initialize express app
 const app = express();
-connectDB();s
+connectDB();
 
 // CORS configuration - FIXED for production + local
 const allowedOrigins = [
