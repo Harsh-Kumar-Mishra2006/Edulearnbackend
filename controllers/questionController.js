@@ -1,7 +1,8 @@
 const Question = require('../models/questionModel');
 const QuizAttempt = require('../models/quizAttemptModel');
 const CourseMaterial = require('../models/courseMaterialdata');
-
+// Get student's enrolled courses
+const StudentEnrollment = require('../models/Mylearningmodel');
 // Create new quiz
 const createQuiz = async (req, res) => {
   try {
@@ -285,20 +286,29 @@ const getQuizAttempts = async (req, res) => {
   }
 };
 
-// Get student's available quizzes
+// Get student's available quizzes - DEBUG VERSION
 const getStudentQuizzes = async (req, res) => {
   try {
     const student_email = req.user.email;
+    console.log('🟡 [DEBUG] Fetching quizzes for student:', student_email);
 
-    // Get student's enrolled courses
-    const StudentEnrollment = require('../models/Mylearningmodel');
+    // Get student enrollments
     const enrollments = await StudentEnrollment.find({
       student_email,
       payment_status: 'verified',
       enrollment_status: 'active'
     });
 
+    console.log('🟡 [DEBUG] Student enrollments found:', enrollments.length);
+    console.log('🟡 [DEBUG] Enrollment details:', JSON.stringify(enrollments.map(e => ({
+      course_title: e.course_title,
+      course_category: e.course_category,
+      payment_status: e.payment_status,
+      enrollment_status: e.enrollment_status
+    })), null, 2));
+
     if (enrollments.length === 0) {
+      console.log('🔴 [DEBUG] No active enrollments found for student');
       return res.json({
         success: true,
         data: [],
@@ -307,36 +317,55 @@ const getStudentQuizzes = async (req, res) => {
     }
 
     const enrolledCategories = enrollments.map(e => e.course_category);
+    console.log('🟡 [DEBUG] Enrolled categories:', enrolledCategories);
 
-    // Get published quizzes for enrolled courses
+    // Get ALL quizzes first to see what exists
+    const allQuizzes = await Question.find({})
+      .populate('teacher_id', 'name')
+      .sort({ createdAt: -1 });
+
+    console.log('🟡 [DEBUG] ALL quizzes in database:', allQuizzes.length);
+    console.log('🟡 [DEBUG] All quiz details:', JSON.stringify(allQuizzes.map(q => ({
+      quiz_title: q.quiz_title,
+      course_category: q.course_category,
+      status: q.status,
+      is_active: q.quiz_settings?.is_active,
+      course_title: q.course_title
+    })), null, 2));
+
+    // Now get quizzes for enrolled categories
     const quizzes = await Question.find({
       course_category: { $in: enrolledCategories },
-      status: 'published',
-      'quiz_settings.is_active': true,
-      $or: [
-        { 'quiz_settings.end_date': { $exists: false } },
-        { 'quiz_settings.end_date': null },
-        { 'quiz_settings.end_date': { $gte: new Date() } }
-      ]
+      //status: 'published',
+      'quiz_settings.is_active': true
     })
     .populate('teacher_id', 'name')
-    .select('quiz_title quiz_description quiz_topic total_questions total_points quiz_settings course_title course_category createdAt')
     .sort({ createdAt: -1 });
 
+    console.log('🟡 [DEBUG] Filtered quizzes found:', quizzes.length);
+    console.log('🟡 [DEBUG] Filtered quiz details:', JSON.stringify(quizzes.map(q => ({
+      quiz_title: q.quiz_title,
+      course_category: q.course_category,
+      status: q.status
+    })), null, 2));
+
+    const availableQuizzes = quizzes;   // ← YES, JUST THIS LINE
+    console.log('🟡 [DEBUG] Available quizzes after date filter:', availableQuizzes.length);
+    console.log(`✅ [DEBUG] Final result: Found ${availableQuizzes.length} quizzes for student ${student_email}`);
+    
     res.json({
       success: true,
-      data: quizzes
+      data: availableQuizzes
     });
 
   } catch (error) {
-    console.error('Get student quizzes error:', error);
+    console.error('🔴 [DEBUG] Get student quizzes error:', error);
     res.status(500).json({
       success: false,
       error: "Error fetching student quizzes: " + error.message
     });
   }
 };
-
 // Start quiz attempt
 const startQuizAttempt = async (req, res) => {
   try {
@@ -345,7 +374,7 @@ const startQuizAttempt = async (req, res) => {
     // Get quiz details
     const quiz = await Question.findOne({
       _id: quiz_id,
-      status: 'published',
+      //status: 'published',
       'quiz_settings.is_active': true
     });
 
@@ -539,6 +568,60 @@ const updateQuizAnalytics = async (quizId) => {
     console.error('Update quiz analytics error:', error);
   }
 };
+// GET quiz attempt details for student (THIS WAS MISSING!)
+const getQuizAttempt = async (req, res) => {
+  try {
+    const { attempt_id } = req.params;
+
+    const attempt = await QuizAttempt.findOne({
+      _id: attempt_id,
+      student_id: req.user.userId,
+      status: 'in_progress'
+    }).populate('quiz_id');
+
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        error: "Attempt not found or already submitted"
+      });
+    }
+
+    const quiz = attempt.quiz_id;
+
+    // Return clean quiz data (without correct answers)
+    const cleanQuiz = {
+      _id: quiz._id,
+      quiz_title: quiz.quiz_title,
+      quiz_description: quiz.quiz_description,
+      quiz_topic: quiz.quiz_topic,
+      total_questions: quiz.total_questions,
+      total_points: quiz.total_points,
+      quiz_settings: quiz.quiz_settings,
+      questions: quiz.questions.map(q => ({
+        question_number: q.question_number,
+        question_text: q.question_text,
+        options: q.options,
+        points: q.points || 1
+      }))
+    };
+
+    res.json({
+      success: true,
+      data: {
+        quiz: cleanQuiz,
+        attempt_id: attempt._id,
+        time_limit: quiz.quiz_settings.time_limit
+      }
+    });
+
+  } catch (error) {
+    console.error('Get quiz attempt error:', error);
+    res.status(500).json({
+      success: false,
+      error: "Error loading quiz"
+    });
+  }
+};
 
 module.exports = {
   createQuiz,
@@ -549,5 +632,6 @@ module.exports = {
   getQuizAttempts,
   getStudentQuizzes,
   startQuizAttempt,
-  submitQuizAttempt
+  submitQuizAttempt,
+  getQuizAttempt
 };

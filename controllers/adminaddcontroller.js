@@ -118,7 +118,7 @@ const addTeacher = async (req, res) => {
       years_of_experience,
       specialization: specialization || [],
       bio: bio || '',
-      created_by: req.user.userId // From auth middleware
+      created_by: req.user.id // From auth middleware
     });
 
     console.log('🟡 8. Creating teacher record...');

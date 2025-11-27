@@ -174,7 +174,7 @@ app.get('/', (req, res) => {
       updateCourseInfo: 'api/course-materials/courses/:course_id/info',
       reorderVideos: 'api/course-materials/courses/:course_id/reorder-videos',
       uploadVideoToCourse: 'api/course-materials/courses/:course_id/videos',
-uploadDocumentToCourse: 'api/course-materials/courses/:course_id/documents',
+      uploadDocumentToCourse: 'api/course-materials/courses/:course_id/documents',
       deleteCourseMaterial: 'api/course-materials/courses/:course_id/materials/:material_type/:material_id',
       checkTeacherAuthorization: '/api/auth/check-teacher',
       getCourseMaterials: '/api/course-materials/courses/:course_id/materials',

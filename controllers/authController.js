@@ -62,12 +62,12 @@ const checkTeacherAuthorization = async (req, res) => {
 
 // Signup controller with role support
 const signup = async (req, res) => {
-  let { name, email, username, password, role = 'student', profile = {} } = req.body;
+  let { name, email, username,phone, password, role = 'student', profile = {} } = req.body;
 
-  if (!name || !email || !password || !username) {
+  if (!name || !email || !password || !username || !phone) {
     return res.status(400).json({ 
       success: false,
-      error: 'Name, email, username and password are required' 
+      error: 'Name, email, username, phone number and password are required' 
     });
   }
 
@@ -101,6 +101,7 @@ const signup = async (req, res) => {
       name,
       email, 
       username, 
+      phone,
       password: hash,
       role,
       profile
@@ -113,6 +114,7 @@ const signup = async (req, res) => {
         name: createuser.name,
         email: createuser.email,
         username: createuser.username,
+        phone: createuser.phone,
         role: createuser.role,
         profile: createuser.profile
       },

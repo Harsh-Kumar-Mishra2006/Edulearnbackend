@@ -24,6 +24,11 @@ const authSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: 6
   },
+  phone:{
+    type: String,
+    trim: true,
+    default: null
+  },
   role: {
     type: String,
     enum: ['student', 'teacher', 'admin'],
