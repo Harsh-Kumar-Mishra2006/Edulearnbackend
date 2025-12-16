@@ -5,11 +5,16 @@ const bcryptjs = require('bcryptjs');
 const Teacher = require('../models/adminadddata');
 
 // Check if user is authorized teacher
+// Check if user is authorized teacher
 const checkTeacherAuthorization = async (req, res) => {
   try {
+    console.log('🔵 [1] /check-teacher endpoint called');
+    
     const token = req.header('Authorization')?.replace('Bearer ', '');
+    console.log('🔵 [2] Token exists:', token ? 'Yes' : 'No');
     
     if (!token) {
+      console.log('❌ [3] No token provided');
       return res.status(401).json({
         success: false,
         error: "No token provided"
@@ -17,22 +22,71 @@ const checkTeacherAuthorization = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, 'mypassword');
+    console.log('🔵 [4] Decoded token userId:', decoded.userId);
+    console.log('🔵 [5] Decoded token email:', decoded.email);
+    
     const user = await auth.findById(decoded.userId);
+    console.log('🔵 [6] User found in DB:', user ? `Yes (${user.email})` : 'No');
     
     if (!user) {
+      console.log('❌ [7] User not found in database');
       return res.status(401).json({
         success: false,
         error: "User not found"
       });
     }
 
-    // Check if user is a teacher registered by admin
+    console.log('🔵 [8] User details:', {
+      role: user.role,
+      isVerified: user.isVerified,
+      isActive: user.isActive
+    });
+
+    // ✅ ADD THESE CRITICAL CHECKS:
+    if (user.role !== 'teacher') {
+      console.log('❌ [9] FAIL: User role is not teacher. Role is:', user.role);
+      return res.json({
+        success: true,
+        isAuthorized: false,
+        message: 'User is not a teacher'
+      });
+    }
+
+    if (!user.isVerified) {
+      console.log('❌ [10] FAIL: User is not verified');
+      return res.json({
+        success: true,
+        isAuthorized: false,
+        message: 'Teacher account not verified'
+      });
+    }
+
+    if (!user.isActive) {
+      console.log('❌ [11] FAIL: User is not active');
+      return res.json({
+        success: true,
+        isAuthorized: false,
+        message: 'Teacher account inactive'
+      });
+    }
+
+    // Check if teacher is registered by admin
+    console.log('🔵 [12] Searching for teacher profile with email:', user.email);
     const teacher = await Teacher.findOne({ 
       email: user.email,
       status: 'active'
     });
 
-    if (teacher && user.role === 'teacher') {
+    console.log('🔵 [13] Teacher profile found:', teacher ? 'Yes' : 'No');
+    
+    if (teacher) {
+      console.log('✅ [14] SUCCESS: Teacher fully authorized!');
+      console.log('   Teacher details:', {
+        id: teacher._id,
+        name: teacher.name,
+        course: teacher.course,
+        status: teacher.status
+      });
       return res.json({
         success: true,
         isAuthorized: true,
@@ -40,22 +94,23 @@ const checkTeacherAuthorization = async (req, res) => {
           id: teacher._id,
           name: teacher.name,
           email: teacher.email,
-          course_domain: teacher.course_domain
+          course: teacher.course
         }
       });
     }
 
+    console.log('❌ [15] FAIL: Teacher not registered by admin or status not active');
     res.json({
       success: true,
       isAuthorized: false,
-      message: 'Not an authorized teacher'
+      message: 'Teacher not registered by admin'
     });
 
   } catch (error) {
-    console.error('Teacher auth check error:', error);
+    console.error('❌ [ERROR] Teacher auth check error:', error.message);
     res.status(500).json({
       success: false,
-      error: "Error checking teacher authorization"
+      error: "Error checking teacher authorization: " + error.message
     });
   }
 };

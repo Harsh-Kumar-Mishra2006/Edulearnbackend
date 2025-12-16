@@ -52,4 +52,13 @@ router.put('/courses/:course_id/reorder-meetings', reorderMeetings);
 // Delete materials
 router.delete('/courses/:course_id/materials/:material_type/:material_id', deleteCourseMaterial);
 
+// In your routes, add:
+router.get('/test-auth', teacherAuth, async (req, res) => {
+  res.json({
+    success: true,
+    message: "Authentication successful",
+    user: req.user
+  });
+});
+
 module.exports = router;

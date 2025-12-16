@@ -20,8 +20,10 @@ router.use(adminAuth);
 router.post('/add-teacher', addTeacher);
 router.get('/teachers', getAllTeachers); // Specific route
 router.get('/stats', getTeacherStats);   // Specific route  
-router.get('/:id', getTeacherById);      // Dynamic route LAST
-router.put('/:id', updateTeacher);
-router.delete('/:id', deleteTeacher);
+// DYNAMIC routes with /teachers prefix  
+router.get('/teachers/:id', getTeacherById);      // GET /api/admin/teachers/:id
+router.put('/teachers/:id', updateTeacher);       // PUT /api/admin/teachers/:id  
+router.delete('/teachers/:id', deleteTeacher);    // DELETE /api/admin/teachers/:id
+
 
 module.exports = router;

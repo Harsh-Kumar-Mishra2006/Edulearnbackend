@@ -13,13 +13,14 @@ const studentEnrollmentSchema = new mongoose.Schema({
   },
   student_name: {
     type: String,
-    required: true
+    required: true,
   },
   course_category: {
     type: String,
     required: true,
     enum: [
-      'web-development', 'data-science', 'ai-ml', 'mobile-dev', 'design', 'business', 'other'
+      'web-development','mobile-dev','design', 'business', 
+      'marketing', 'productivity', 'other'
     ],
     default: 'other'
   },

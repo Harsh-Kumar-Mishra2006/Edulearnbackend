@@ -195,7 +195,7 @@ const getAllTeachers = async (req, res) => {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
-        { course_domain: { $regex: search, $options: 'i' } }
+        { course: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -302,30 +302,42 @@ const updateTeacher = async (req, res) => {
     });
   }
 };
-
-// Delete teacher (soft delete)
 const deleteTeacher = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    console.log('🟡 DELETE BACKEND - Teacher ID to delete:', id);
+    console.log('🟡 Request user:', req.user);
 
-    const teacher = await Teacher.findByIdAndUpdate(
-      id,
-      { status: 'inactive' },
-      { new: true }
-    );
-
+    // First, find the teacher to get their email
+    const teacher = await Teacher.findById(id);
+    
     if (!teacher) {
+      console.log('🔴 Teacher not found with ID:', id);
       return res.status(404).json({
         success: false,
         error: "Teacher not found"
       });
     }
 
+    console.log('🟡 Found teacher:', teacher.email);
+
+    // Soft delete - update status to inactive
+    const updatedTeacher = await Teacher.findByIdAndUpdate(
+      id,
+      { status: 'inactive' },
+      { new: true }
+    );
+
+    console.log('🟡 Teacher soft deleted:', updatedTeacher.status);
+
     // Also deactivate the auth account
-    await Auth.findOneAndUpdate(
+    const authUpdate = await Auth.findOneAndUpdate(
       { email: teacher.email },
       { isActive: false }
     );
+
+    console.log('🟡 Auth account deactivated:', authUpdate ? 'Yes' : 'No');
 
     res.json({
       success: true,
@@ -333,7 +345,7 @@ const deleteTeacher = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deleting teacher:', error);
+    console.error('🔴 DELETE ERROR:', error);
     res.status(500).json({
       success: false,
       error: "Error deleting teacher: " + error.message

@@ -138,7 +138,7 @@ const uploadDocumentToCourse = async (req, res) => {
     // Verify course exists and belongs to teacher
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.teacher.id
+      teacher_id: req.user.userId,
     });
 
     if (!course) {
@@ -204,7 +204,7 @@ const getTeacherCourses = async (req, res) => {
   try {
     const { status, category } = req.query;
     
-    let query = { teacher_id: req.user.userId };
+    let query = { teacher_id: req.user.userId};
     
     if (status) query.status = status;
     if (category) query.course_category = category;
@@ -307,7 +307,7 @@ const updateCourseInfo = async (req, res) => {
     const { course_title, course_description, course_category, course_settings, tags } = req.body;
 
     const course = await CourseMaterial.findOneAndUpdate(
-      { _id: course_id, teacher_id: req.user.userId },
+      { _id: course_id,teacher_id: req.user.userId, },
       {
         course_title,
         course_description,
@@ -400,7 +400,7 @@ const reorderVideos = async (req, res) => {
 
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.user.userId
+      teacher_id: req.user.userId,
     });
 
     if (!course) {
@@ -440,7 +440,7 @@ const getCourseMaterials = async (req, res) => {
 
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.user.userId
+      teacher_id: req.user.userId,
     }).select('materials course_title');
 
     if (!course) {
@@ -476,7 +476,7 @@ const updateVideoInfo = async (req, res) => {
 
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.user.userId
+      teacher_id: req.user.userId,
     });
 
     if (!course) {
@@ -524,7 +524,7 @@ const updateDocumentInfo = async (req, res) => {
 
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.user.userId
+      teacher_id: req.user.userId,
     });
 
     if (!course) {

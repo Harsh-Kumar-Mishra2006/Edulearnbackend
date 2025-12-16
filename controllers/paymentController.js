@@ -1,22 +1,68 @@
+// paymentController.js - Modified version
 const Payment = require('../models/paymentModel');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const StudentEnrollment = require('../models/Mylearningmodel');
-const PersonalInfo = require('../models/formdatapersonal'); // Add this import
+const PersonalInfo = require('../models/formdatapersonal');
+
+// Hardcoded course data (same as in courseRoutes.js)
+const courseData = {
+  'Web Development': {
+    title: 'Web Development',
+    price: 299,
+    category: 'Development',
+    duration: '12 weeks',
+    level: 'Beginner to Advanced'
+  },
+  'Microsoft Office': {
+    title: 'Microsoft Office',
+    price: 99,
+    category: 'Productivity',
+    duration: '6 weeks',
+    level: 'All Levels'
+  },
+  'Mobile App Development': {
+    title: 'Mobile App Development',
+    price: 349,
+    category: 'Development',
+    duration: '10 weeks',
+    level: 'Intermediate'
+  },
+  'UI/UX Design': {
+    title: 'UI/UX Design',
+    price: 249,
+    category: 'Design',
+    duration: '8 weeks',
+    level: 'Beginner'
+  },
+  'Digital Marketing': {
+    title: 'Digital Marketing',
+    price: 199,
+    category: 'Marketing',
+    duration: '7 weeks',
+    level: 'All Levels'
+  },
+  'Graphic Design': {
+    title: 'Graphic Design',
+    price: 229,
+    category: 'Design',
+    duration: '9 weeks',
+    level: 'Beginner to Intermediate'
+  }
+};
 
 // After payment verification, create enrollment
 const createStudentEnrollment = async (payment) => {
   try {
-    // CORRECTED course category mapping
+    // Course category mapping
     const courseTrackMap = {
       'Web Development': 'web-development',
-      'Mobile App Development': 'mobile-dev', // Changed from 'app-development'
-      'Digital Marketing': 'digital-marketing', // This doesn't exist in CourseMaterial model
-      'Microsoft Office': 'microsoft-office', // This doesn't exist in CourseMaterial model
-      'UI/UX Design': 'design', // Changed from 'ui-ux-design'
-      'Business': 'business',
-      'Graphic Design': 'design' // Map Graphic Design to design
+      'Mobile App Development': 'mobile-dev',
+      'Digital Marketing': 'marketing',
+      'Microsoft Office': 'productivity',
+      'UI/UX Design': 'design',
+      'Graphic Design': 'design'
     };
 
     const courseCategory = courseTrackMap[payment.course_track] || 'other';
@@ -60,7 +106,6 @@ const createStudentEnrollment = async (payment) => {
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/payments/';
-    // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -87,7 +132,7 @@ const upload = multer({
   }
 });
 
-// Handle payment with screenshot upload - UPDATED TO AUTO-ENROLL
+// Handle payment with screenshot upload - UPDATED: Uses hardcoded course data
 const processPayment = async (req, res) => {
   try {
     console.log('=== 🟡 PAYMENT PROCESSING START ===');
@@ -96,75 +141,124 @@ const processPayment = async (req, res) => {
     console.log('3. Request body:', req.body);
 
     const { student_email, course_track, amount } = req.body;
+
+    // 1. Check course in hardcoded data (NOT from database)
+    const course = courseData[course_track];
+
+    if (!course) {
+      console.log('🔴 Course not found:', course_track);
+      console.log('🟡 Available courses:', Object.keys(courseData));
+      return res.status(400).json({ 
+        success: false,
+        error: "Course not found. Available courses: " + Object.keys(courseData).join(', ')
+      });
+    }
+
+    console.log('🟢 Course found in hardcoded data:', course.title, 'Price:', course.price);
+    const coursePrice = course.price;
     
-    // Validate required fields
-    if (!student_email) {
-      console.log('🔴 4. Validation failed: Student email missing');
+    // 2. Validate required fields
+    if (!student_email || !course_track || !req.file) {
       return res.status(400).json({ 
         success: false,
-        error: "Student email is required" 
+        error: "All fields are required" 
       });
     }
 
-    if (!course_track) {
-      console.log('🔴 5. Validation failed: Course track missing');
-      return res.status(400).json({ 
-        success: false,
-        error: "Course track is required" 
-      });
-    }
+    console.log('🟢 4. All validations passed');
 
-    if (!req.file) {
-      console.log('🔴 6. Validation failed: Screenshot missing');
-      return res.status(400).json({ 
-        success: false,
-        error: "Payment screenshot is required" 
-      });
-    }
-
-    console.log('🟢 7. All validations passed');
-
-    // Create payment record
+    // 3. Create payment record
     const payment = new Payment({
       student_email: student_email,
       course_track: course_track,
-      amount: amount || 499,
+      amount: coursePrice, // Use price from hardcoded data
       screenshot_path: req.file.path,
-      status: 'verified' // Changed from 'pending' to 'verified' for auto-enrollment
+      status: 'verified'
     });
 
-    console.log('🟡 8. Saving payment to database...');
+    console.log('🟡 5. Saving payment to database...');
     await payment.save();
-    console.log('🟢 9. Payment saved successfully:', payment._id);
+    console.log('🟢 6. Payment saved successfully:', payment._id);
 
-    // ✅ AUTO-ENROLL STUDENT AFTER PAYMENT
-    console.log('🟡 10. Creating student enrollment...');
-    let enrollment;
+    // 4. ✅ AUTO-ENROLL STUDENT AFTER PAYMENT
+    console.log('🟡 7. Creating student enrollment...');
+    
     try {
-      enrollment = await createStudentEnrollment(payment);
-      console.log('🟢 11. Student enrollment created:', enrollment._id);
+      // Get student name from personal info
+      const personalInfo = await PersonalInfo.findOne({ email: student_email });
+      const studentName = personalInfo ? personalInfo.name : 'Student';
+      
+      // Map course track to category
+      let courseCategory = 'other';
+if (course_track === 'Web Development') courseCategory = 'web-development';
+else if (course_track === 'Mobile App Development') courseCategory = 'mobile-dev';
+else if (course_track === 'UI/UX Design' || course_track === 'Graphic Design') courseCategory = 'design';
+else if (course_track === 'Digital Marketing') courseCategory = 'marketing';
+else if (course_track === 'Microsoft Office') courseCategory = 'productivity';
+      
+      // Create enrollment
+      const enrollment = new StudentEnrollment({
+        student_email: student_email,
+        student_name: studentName,
+        course_category: courseCategory,
+        enrollment_status: 'active',
+        payment_status: 'verified',
+        payment_id: payment._id,
+        progress: {
+          overall_progress: 0,
+          last_accessed: new Date()
+        }
+      });
+
+      await enrollment.save();
+      console.log('✅ 8. Student enrollment created successfully:', enrollment._id);
+      
+      // Send success response with course details from hardcoded data
+      return res.json({
+        success: true,
+        message: "Payment successful! You are now enrolled in " + course_track,
+        course: {
+          title: course.title,
+          description: "Course description here", // You can add this to courseData if needed
+          price: course.price,
+          duration: course.duration,
+          level: course.level,
+          category: course.category
+        },
+        payment_id: payment._id,
+        enrollment_id: enrollment._id,
+        enrollment_date: new Date(),
+        status: 'enrolled'
+      });
+
     } catch (enrollmentError) {
-      console.log('🟡 12. Enrollment creation failed, but payment was successful');
-      // Continue even if enrollment fails
+      console.log('🟡 9. Enrollment creation failed:', enrollmentError.message);
+      
+      // Even if enrollment fails, payment was successful
+      return res.json({
+        success: true,
+        message: "Payment successful! Please contact admin for enrollment confirmation.",
+        payment_id: payment._id,
+        status: 'payment_successful'
+      });
     }
 
-    res.json({
-      success: true,
-      message: "Payment successful! You are now enrolled in the course.",
-      payment_id: payment._id,
-      enrollment_id: enrollment?._id,
-      status: 'enrolled' // Changed from 'pending_verification'
-    });
-
   } catch (error) {
-    console.error('🔴 13. PAYMENT PROCESSING ERROR:', error);
-    console.error('🔴 14. Error details:', error.message);
+    console.error('🔴 10. PAYMENT PROCESSING ERROR:', error.message);
+    console.error('🔴 Error stack:', error.stack);
     
-    // Handle specific errors
     if (error.code === 11000) {
       return res.status(400).json({ 
         success: false,
         error: "Duplicate payment detected" 
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        success: false,
+        error: "Validation error: " + errors.join(', ')
       });
     }
     
@@ -210,7 +304,7 @@ const getPaymentStatus = async (req, res) => {
   }
 };
 
-// Add a manual verification endpoint for admin
+// Verify payment (admin)
 const verifyPayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -228,7 +322,6 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // Create enrollment after manual verification
     const enrollment = await createStudentEnrollment(payment);
 
     res.json({
@@ -247,10 +340,25 @@ const verifyPayment = async (req, res) => {
   }
 };
 
+// Add a helper function to get all available courses
+const getAvailableCourses = (req, res) => {
+  res.json({
+    success: true,
+    courses: Object.values(courseData).map(course => ({
+      title: course.title,
+      price: course.price,
+      category: course.category,
+      duration: course.duration,
+      level: course.level
+    }))
+  });
+};
+
 module.exports = {
   processPayment,
   getPaymentStatus,
   upload,
   createStudentEnrollment,
-  verifyPayment // Add this export
+  verifyPayment,
+  getAvailableCourses 
 };
