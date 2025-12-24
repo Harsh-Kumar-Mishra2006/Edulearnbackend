@@ -12,7 +12,7 @@ const {
   bulkUpdateCourses
 } = require('../controllers/newCourseController');
 
-const { adminAuth } = require('../middlewares/adminAuthMiddleware');
+const { adminAuth } = require('../middlewares/adminauthMiddleware');
 const { uploadCourseImage } = require('../config/newCourseImageUpload');
 
 // Apply admin authentication to all routes
