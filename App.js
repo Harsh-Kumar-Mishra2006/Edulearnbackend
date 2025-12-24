@@ -18,6 +18,7 @@ const CertificateRoutes = require('./routes/Certificateroute');
 const Mylearning= require('./routes/Mylearningroute');
 const QuestionRoutes = require('./routes/questionRoutes');
 const { downloadCertificate } = require('./controllers/Certificatecontroller');
+const newCourse= require('./routes/newCourseRoute');
 
 // Initialize express app
 const app = express();
@@ -28,7 +29,6 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://edulearn-93zy.onrender.com'
 ];
-
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -242,6 +242,7 @@ app.use('/api/my-learning', Mylearning);
 app.use('/api/quiz', QuestionRoutes);
 app.use('/api/certificates', CertificateRoutes);
 app.use('/uploads', express.static('uploads'));
+app.use('/api/admin/courses', newCourse);
 
 const PORT = process.env.PORT || 3000;
 
