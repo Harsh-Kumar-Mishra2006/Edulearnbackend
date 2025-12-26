@@ -17,11 +17,11 @@ const backgroundformSchema = new mongoose.Schema({
   
   profession: {
     type: String,
-    required: true,
+    required: false,
   },
   fieldofstudy:{
     type: String,
-    required: true,
+    required: false,
   },
 }, {
   timestamps: true,

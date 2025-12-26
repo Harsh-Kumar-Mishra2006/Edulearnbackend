@@ -20,15 +20,15 @@ const courseformSchema = new mongoose.Schema({
   },
   goals: {
     type: String,  // ✅ CHANGED from Number to String
-    required: true,
+    required: false,
   },
   background: {
     type: String,  // ✅ CHANGED from Number to String
-    required: true, 
+    required: false, 
   },
   timecommitment: {  // ✅ FIXED TYPO: timecommitement → timecommitment
     type: String,    // ✅ CHANGED from Number to String
-    required: true,
+    required: false,
   }
 }, {
   timestamps: true,
