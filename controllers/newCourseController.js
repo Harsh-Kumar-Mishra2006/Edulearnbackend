@@ -82,8 +82,6 @@ const createCourse = async (req, res) => {
       
       // Admin info
       createdBy: req.admin.id,
-      createdByName: req.admin.name || 'Admin',
-      createdByEmail: req.user.email,
       
       // Optional fields
       isFree: isFree === 'true' || isFree === true,
@@ -323,7 +321,7 @@ const updateCourseStatus = async (req, res) => {
     const updateData = { status };
     
     // Add publishedAt timestamp if publishing
-    if (status === 'published' && status !== 'published') {
+    if (status === 'published') {
       updateData.publishedAt = Date.now();
     }
 
