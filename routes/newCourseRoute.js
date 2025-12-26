@@ -19,15 +19,14 @@ const { uploadCourseImage } = require('../config/newCourseImageUpload');
 router.use(adminAuth);
 
 // Course management routes
-router.post('/courses', uploadCourseImage, createCourse);
-router.get('/courses', getAllCourses);
-router.get('/courses/stats', getCourseStatistics);
-router.get('/courses/:id', getCourseById);
-router.put('/courses/:id', uploadCourseImage, updateCourse);
-router.put('/courses/:id/status', updateCourseStatus);
-router.delete('/courses/:id', deleteCourse);
-
+router.post('/', uploadCourseImage, createCourse);
+router.get('/', getAllCourses);
+router.get('/stats', getCourseStatistics);
+router.get('/:id', getCourseById);
+router.put('/:id', uploadCourseImage, updateCourse);
+router.put('/:id/status', updateCourseStatus);
+router.delete('/:id', deleteCourse);
 // Bulk operations
-router.post('/courses/bulk-update', bulkUpdateCourses);
+router.post('/bulk-update', bulkUpdateCourses);
 
 module.exports = router;
