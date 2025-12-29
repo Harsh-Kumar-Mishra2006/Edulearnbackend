@@ -12,11 +12,11 @@ const {
   bulkUpdateCourses
 } = require('../controllers/newCourseController');
 
-const { adminAuth } = require('../middlewares/adminauthMiddleware');
+const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
 const { uploadCourseImage } = require('../config/newCourseImageUpload');
 
-// Apply admin authentication to all routes
-router.use(adminAuth);
+// Apply teacher authentication to all routes
+router.use(teacherAuth);
 
 // Course management routes
 router.post('/', uploadCourseImage, createCourse);

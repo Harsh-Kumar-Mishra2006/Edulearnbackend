@@ -51,15 +51,78 @@ const courseSchema = new mongoose.Schema({
     default: 0
   },
   
-  category: {
-    type: String,
-    required: [true, 'Course category is required'],
-    enum: {
-      values: ['Development', 'Design', 'Marketing', 'Productivity', 'Business', 'Technology', 'Data Science', 'Personal Development'],
-      message: 'Invalid category'
-    }
-  },
-  
+  // models/Course.js - Update category enum:
+category: {
+  type: String,
+  required: [true, 'Course category is required'],
+  enum: {
+    values: ['Development', 'Design', 'Marketing', 'Productivity', 'Business', 'Technology', 'Data Science', 'Personal Development', 'Others'],
+    message: 'Invalid category'
+  }
+},
+  // Add these to your courseSchema:
+
+prerequisites: [{
+  type: String,
+  trim: true
+}],
+
+learningOutcomes: [{
+  type: String,
+  trim: true
+}],
+
+targetAudience: [{
+  type: String,
+  trim: true
+}],
+
+metaTitle: {
+  type: String,
+  trim: true,
+  maxlength: [200, 'Meta title cannot exceed 200 characters']
+},
+
+metaDescription: {
+  type: String,
+  trim: true,
+  maxlength: [500, 'Meta description cannot exceed 500 characters']
+},
+
+keywords: [{
+  type: String,
+  trim: true
+}],
+
+isFeatured: {
+  type: Boolean,
+  default: false
+},
+
+instructor: {
+  type: String,
+  trim: true
+},
+
+isActive: {
+  type: Boolean,
+  default: true
+},
+
+studentsEnrolled: {
+  type: Number,
+  default: 0
+},
+
+totalLessons: {
+  type: Number,
+  default: 0
+},
+
+totalHours: {
+  type: Number,
+  default: 0
+},
   features: [{
     type: String,
     trim: true
@@ -68,23 +131,6 @@ const courseSchema = new mongoose.Schema({
   popular: {
     type: Boolean,
     default: false
-  },
-  
-  // Teacher/Instructor information (not from CourseData.js but needed for backend)
-  teacherId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  
-  teacherName: {
-    type: String,
-    required: true
-  },
-  
-  teacherEmail: {
-    type: String,
-    required: true
   },
   
   // Additional fields for management
@@ -110,6 +156,22 @@ const courseSchema = new mongoose.Schema({
     type: Number,
     min: 0
   },
+  createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Teacher', // or 'User' depending on your user model
+  required: true
+},
+
+isActive: {
+  type: Boolean,
+  default: true
+},
+
+// Also add this if you want to track updates
+updatedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Teacher'
+},
   
   // Timestamps
   createdAt: {

@@ -1,6 +1,7 @@
 const Teacher = require('../models/adminadddata');
 const Auth = require('../models/authdata');
 const bcryptjs = require('bcryptjs');
+const EmailService = require('../services/emailService'); // Import email service
 
 // Generate random password
 const generateRandomPassword = () => {
@@ -13,7 +14,7 @@ const generateRandomPassword = () => {
   return password;
 };
 
-// Add new teacher
+// Add new teacher with email notification
 const addTeacher = async (req, res) => {
   try {
     console.log('=== 🟡 ADD TEACHER PROCESS START ===');
@@ -127,32 +128,72 @@ const addTeacher = async (req, res) => {
 
     // Prepare response (don't send password in response)
     const teacherResponse = {
-  _id: teacher._id,
-  name: teacher.name,
-  email: teacher.email,
-  course: teacher.course,
-  phone_number: teacher.phone_number,
-  address: teacher.address,
-  qualification: teacher.qualification,
-  years_of_experience: teacher.years_of_experience,
-  specialization: teacher.specialization,
-  bio: teacher.bio,
-  status: teacher.status,
-  joining_date: teacher.joining_date
-};
-
+      _id: teacher._id,
+      name: teacher.name,
+      email: teacher.email,
+      course: teacher.course,
+      phone_number: teacher.phone_number,
+      address: teacher.address,
+      qualification: teacher.qualification,
+      years_of_experience: teacher.years_of_experience,
+      specialization: teacher.specialization,
+      bio: teacher.bio,
+      status: teacher.status,
+      joining_date: teacher.joining_date
+    };
 
     console.log('✅ TEACHER ADDED SUCCESSFULLY');
 
+    // ✅ SEND EMAIL WITH CREDENTIALS
+    try {
+      console.log('📧 Sending welcome email to teacher...');
+      
+      const emailVariables = {
+        teacherName: name,
+        username: username,
+        tempPassword: tempPassword,
+        appName: process.env.APP_NAME || 'EduLearn',
+        loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
+        adminName: req.user.name || 'Admin',
+        adminEmail: req.user.email || 'admin@edulearn.com',
+        supportEmail: process.env.SUPPORT_EMAIL || 'support@edulearn.com',
+        teacherPortalUrl: process.env.FRONTEND_URL + '/teacher/dashboard' || 'http://localhost:5173/teacher/dashboard'
+      };
+
+      await EmailService.sendTemplateEmail(
+        'teacher_welcome',
+        email,
+        emailVariables,
+        {
+          userId: newUser._id,
+          userType: 'teacher',
+          adminId: req.user.id
+        }
+      );
+
+      console.log('✅ Welcome email sent successfully');
+    } catch (emailError) {
+      console.error('⚠️ Email sending failed:', emailError);
+      // Don't fail the whole process if email fails
+    }
+
+    try {
+  console.log('📧 Sending welcome email to teacher...');
+  await EmailService.sendTemplateEmail('teacher_welcome', email, emailVariables, metadata);
+  console.log('✅ Welcome email sent successfully');
+} catch (emailError) {
+  console.error('⚠️ Email sending failed:', emailError);
+  // Don't fail the whole process if email fails
+}
     res.status(201).json({
       success: true,
-      message: "Teacher added successfully! Credentials generated.",
+      message: "Teacher added successfully! Credentials have been sent to teacher's email.",
       data: teacherResponse,
       credentials: {
         username: username,
         tempPassword: tempPassword,
-        loginUrl: "http://localhost:5173/login",
-        note: "Please share these credentials with the teacher. They should change their password after first login."
+        loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
+        note: "Credentials have been emailed to the teacher. They should change their password after first login."
       }
     });
 
@@ -302,6 +343,7 @@ const updateTeacher = async (req, res) => {
     });
   }
 };
+
 const deleteTeacher = async (req, res) => {
   try {
     const { id } = req.params;

@@ -18,19 +18,25 @@ const createCourse = async (req, res) => {
       discountPrice,
       prerequisites,
       learningOutcomes,
-      targetAudience,
       metaTitle,
       metaDescription,
-      keywords,
       isFeatured,
       status
     } = req.body;
 
-    // Validate required fields
-    if (!title || !description || !duration || !level || !price || !category) {
+    // 🔴 FIX: Proper validation for free courses
+    if (!isFree && (!price || price === '')) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: title, description, duration, level, price, category'
+        error: 'Price is required for paid courses'
+      });
+    }
+
+    // Validate required fields
+    if (!title || !description || !duration || !level || !category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: title, description, duration, level, category'
       });
     }
 
@@ -68,6 +74,12 @@ const createCourse = async (req, res) => {
     // Get image filename from upload
     const image = req.file ? req.file.filename : 'default-course.jpg';
 
+    // Get teacher/instructor info
+    const teacherName = req.teacher ? req.teacher.name || req.teacher.username : 'Unknown Instructor';
+
+    // Calculate price
+    const coursePrice = isFree === 'true' || isFree === true ? 0 : parseFloat(price);
+
     // Create new course
     const course = new Course({
       title: title.trim(),
@@ -75,25 +87,24 @@ const createCourse = async (req, res) => {
       image,
       duration: duration.trim(),
       level,
-      price: parseFloat(price),
+      price: coursePrice,
       category,
       features: featuresArray,
       popular: popular === 'true' || popular === true,
       
-      // Admin info
-      createdBy: req.admin.id,
+      // Teacher info
+      createdBy: req.teacher.id,
+      instructor: teacherName,
       
       // Optional fields
       isFree: isFree === 'true' || isFree === true,
       discountPrice: discountPrice ? parseFloat(discountPrice) : undefined,
       prerequisites: parseArrayField(prerequisites),
       learningOutcomes: parseArrayField(learningOutcomes),
-      targetAudience: parseArrayField(targetAudience),
       metaTitle: metaTitle || title.trim(),
       metaDescription: metaDescription || description.trim().substring(0, 160),
-      keywords: parseArrayField(keywords),
       isFeatured: isFeatured === 'true' || isFeatured === true,
-      status: status || 'published'
+      status: status || 'published' // Default to published for teacher
     });
 
     await course.save();

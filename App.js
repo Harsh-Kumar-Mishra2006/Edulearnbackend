@@ -19,11 +19,20 @@ const Mylearning= require('./routes/Mylearningroute');
 const QuestionRoutes = require('./routes/questionRoutes');
 const { downloadCertificate } = require('./controllers/Certificatecontroller');
 const newCourse= require('./routes/newCourseRoute');
-
+const emailRoutes = require('./routes/emailRoutes');
+const {logger} = require('./utils/emailTemplates');
+const testEmailRoute = require('./routes/testEmail');
+const assignmentRoutes = require('./routes/assignmentRoutes');
 // Initialize express app
 const app = express();
 connectDB();
 
+// Add after importing assignmentRoutes
+console.log('🔍 [APP.JS] Assignment routes imported:', assignmentRoutes ? 'YES' : 'NO');
+console.log('🔍 [APP.JS] Checking assignmentRoutes object:', {
+  stack: assignmentRoutes.stack ? `Has ${assignmentRoutes.stack.length} routes` : 'No stack',
+  name: assignmentRoutes.name || 'No name'
+});
 // CORS configuration - FIXED for production + local
 const allowedOrigins = [
   'http://localhost:5173',
@@ -242,7 +251,24 @@ app.use('/api/my-learning', Mylearning);
 app.use('/api/quiz', QuestionRoutes);
 app.use('/api/certificates', CertificateRoutes);
 app.use('/uploads', express.static('uploads'));
-app.use('/api/admin/courses', newCourse);
+app.use('/api/teacher/courses', newCourse);
+app.use('/api/email', emailRoutes);
+app.use('/api/test/email-test', testEmailRoute);
+
+// Add this BEFORE app.use('/api/assignments', assignmentRoutes);
+app.get('/api/debug/assignments-check', (req, res) => {
+  console.log('🔍 Assignment routes check endpoint hit');
+  res.json({
+    success: true,
+    message: 'Assignments debug endpoint working',
+    routes: {
+      assignmentRoutes: assignmentRoutes ? 'Imported' : 'Not imported',
+      assignmentRoutesStack: assignmentRoutes?.stack?.length || 0
+    }
+  });
+});
+
+app.use('/api/assignments', assignmentRoutes);
 
 const PORT = process.env.PORT || 3000;
 
