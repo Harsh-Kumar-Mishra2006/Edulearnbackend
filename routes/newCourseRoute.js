@@ -14,7 +14,7 @@ const {
 } = require('../controllers/newCourseController');
 
 const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
-const { studentAuth } = require('../middlewares/studentAuthMiddleware');
+const { studentAuth } = require('../middlewares/studentauthmiddleware');
 const { uploadCourseImage } = require('../config/newCourseImageUpload');
 
 // Apply teacher authentication to all routes
