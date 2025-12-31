@@ -9,10 +9,12 @@ const {
   updateCourseStatus,
   deleteCourse,
   getCourseStatistics,
-  bulkUpdateCourses
+  bulkUpdateCourses,
+  getPublishedCoursesForStudents
 } = require('../controllers/newCourseController');
 
 const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
+const { studentAuth } = require('../middlewares/studentAuthMiddleware');
 const { uploadCourseImage } = require('../config/newCourseImageUpload');
 
 // Apply teacher authentication to all routes
@@ -26,7 +28,8 @@ router.get('/:id', getCourseById);
 router.put('/:id', uploadCourseImage, updateCourse);
 router.put('/:id/status', updateCourseStatus);
 router.delete('/:id', deleteCourse);
-// Bulk operations
+// Bulk operation
 router.post('/bulk-update', bulkUpdateCourses);
+router.get('/', studentAuth, getPublishedCoursesForStudents);
 
 module.exports = router;

@@ -143,10 +143,9 @@ const addTeacher = async (req, res) => {
     };
 
     console.log('✅ TEACHER ADDED SUCCESSFULLY');
-
-    // ✅ SEND EMAIL WITH CREDENTIALS
-    try {
-      console.log('📧 Sending welcome email to teacher...');
+    // ✅ SEND EMAIL WITH CREDENTIALS (IN BACKGROUND)
+    if (process.env.NODE_ENV !== 'test') { // Optional: skip in tests
+      console.log('📧 Queueing welcome email to teacher...');
       
       const emailVariables = {
         teacherName: name,
@@ -160,40 +159,30 @@ const addTeacher = async (req, res) => {
         teacherPortalUrl: process.env.FRONTEND_URL + '/teacher/dashboard' || 'http://localhost:5173/teacher/dashboard'
       };
 
-      await EmailService.sendTemplateEmail(
-        'teacher_welcome',
-        email,
-        emailVariables,
-        {
-          userId: newUser._id,
-          userType: 'teacher',
-          adminId: req.user.id
-        }
-      );
+      const metadata = {
+        userId: newUser._id,
+        userType: 'teacher',
+        adminId: req.user.id,
+        teacherId: teacher._id
+      };
 
-      console.log('✅ Welcome email sent successfully');
-    } catch (emailError) {
-      console.error('⚠️ Email sending failed:', emailError);
-      // Don't fail the whole process if email fails
+      // Send email in background WITHOUT await (don't block response)
+      EmailService.sendTemplateEmail('teacher_welcome', email, emailVariables, metadata)
+        .then(() => console.log('✅ Welcome email sent successfully'))
+        .catch(error => console.error('⚠️ Email sending failed (non-critical):', error.message));
     }
 
-    try {
-  console.log('📧 Sending welcome email to teacher...');
-  await EmailService.sendTemplateEmail('teacher_welcome', email, emailVariables, metadata);
-  console.log('✅ Welcome email sent successfully');
-} catch (emailError) {
-  console.error('⚠️ Email sending failed:', emailError);
-  // Don't fail the whole process if email fails
-}
     res.status(201).json({
       success: true,
       message: "Teacher added successfully! Credentials have been sent to teacher's email.",
       data: teacherResponse,
       credentials: {
-        username: username,
+         username: username,
         tempPassword: tempPassword,
         loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
-        note: "Credentials have been emailed to the teacher. They should change their password after first login."
+        teacherName: name,
+        teacherEmail: email,
+        note: "These credentials have also been sent to the teacher's email."
       }
     });
 

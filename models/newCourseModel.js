@@ -162,11 +162,6 @@ totalHours: {
   required: true
 },
 
-isActive: {
-  type: Boolean,
-  default: true
-},
-
 // Also add this if you want to track updates
 updatedBy: {
   type: mongoose.Schema.Types.ObjectId,
