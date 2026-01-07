@@ -23,6 +23,7 @@ const emailRoutes = require('./routes/emailRoutes');
 const {logger} = require('./utils/emailTemplates');
 const testEmailRoute = require('./routes/testEmail');
 const assignmentRoutes = require('./routes/assignmentRoutes');
+const studentCourseRoutes = require('./routes/studentCourseRoutes');
 // Initialize express app
 const app = express();
 connectDB();
@@ -254,6 +255,7 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api/teacher/courses', newCourse);
 app.use('/api/email', emailRoutes);
 app.use('/api/test/email-test', testEmailRoute);
+app.use('/api/student/courses', studentCourseRoutes);
 
 // Add this BEFORE app.use('/api/assignments', assignmentRoutes);
 app.get('/api/debug/assignments-check', (req, res) => {

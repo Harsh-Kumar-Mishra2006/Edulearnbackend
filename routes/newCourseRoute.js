@@ -14,22 +14,18 @@ const {
 } = require('../controllers/newCourseController');
 
 const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
-const { studentAuth } = require('../middlewares/studentauthMiddleware');
 const { uploadCourseImage } = require('../config/newCourseImageUpload');
 
-// Apply teacher authentication to all routes
-router.use(teacherAuth);
+// ============ TEACHER ROUTES ============
+router.use('/teacher', teacherAuth); // Apply to all teacher routes
 
-// Course management routes
-router.post('/', uploadCourseImage, createCourse);
-router.get('/', getAllCourses);
-router.get('/stats', getCourseStatistics);
-router.get('/:id', getCourseById);
-router.put('/:id', uploadCourseImage, updateCourse);
-router.put('/:id/status', updateCourseStatus);
-router.delete('/:id', deleteCourse);
-// Bulk operation
-router.post('/bulk-update', bulkUpdateCourses);
-router.get('/', studentAuth, getPublishedCoursesForStudents);
+router.post('/teacher', uploadCourseImage, createCourse);
+router.get('/teacher', getAllCourses);
+router.get('/teacher/stats', getCourseStatistics);
+router.get('/teacher/:id', getCourseById);
+router.put('/teacher/:id', uploadCourseImage, updateCourse);
+router.put('/teacher/:id/status', updateCourseStatus);
+router.delete('/teacher/:id', deleteCourse);
+router.post('/teacher/bulk-update', bulkUpdateCourses);
 
 module.exports = router;
