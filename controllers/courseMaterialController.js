@@ -57,24 +57,36 @@ const createCourse = async (req, res) => {
   }
 };
 
-// Upload video to course
 const uploadVideoToCourse = async (req, res) => {
   try {
     const { course_id } = req.params;
     const { title, description, duration, is_public = true, video_order = 0 } = req.body;
 
-    // FIX: Use req.file instead of req.files
+    // FIX: Check for the correct field name
     if (!req.file) {
+      console.log('❌ No file in request');
+      console.log('Request body:', req.body);
+      console.log('Request file:', req.file);
+      console.log('Request files:', req.files);
+      
       return res.status(400).json({
         success: false,
         error: "Video file is required"
       });
     }
 
-    // FIX: Use req.user.userId instead of req.teacher.id
+    console.log('✅ File received:', {
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path,
+      destination: req.file.destination
+    });
+
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.user.userId // Changed from req.teacher.id
+      teacher_id: req.user.userId
     });
 
     if (!course) {
@@ -84,18 +96,21 @@ const uploadVideoToCourse = async (req, res) => {
       });
     }
 
-    const videoFile = req.file; // Changed from req.files.video[0]
-
+    // IMPORTANT: The file is already saved to 'uploads/courses/videos/' by multer
+    // So we need to construct the correct URL
     const videoData = {
       title: title || `Video ${course.materials.videos.length + 1}`,
       description: description || '',
-      video_url: `/uploads/courses/videos/${videoFile.filename}`,
-      thumbnail_url: null, // Remove thumbnail since we're not uploading it
+      // CORRECT PATH: Use the relative path from uploads folder
+      video_url: `/uploads/courses/videos/${req.file.filename}`,
       duration: duration || '00:00',
-      file_size: videoFile.size,
+      file_size: req.file.size,
       is_public: is_public,
-      video_order: parseInt(video_order)
+      video_order: parseInt(video_order),
+      upload_date: new Date()
     };
+
+    console.log('📹 Video data to save:', videoData);
 
     // Add video to course
     course.materials.videos.push(videoData);
@@ -115,27 +130,39 @@ const uploadVideoToCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Upload video error:', error);
+    console.error('🚨 Upload video error:', error);
     res.status(500).json({
       success: false,
       error: "Error uploading video: " + error.message
     });
   }
 };
-// Upload document to course
 const uploadDocumentToCourse = async (req, res) => {
   try {
     const { course_id } = req.params;
     const { title, description, is_public = true, document_type = 'notes' } = req.body;
 
+    // FIX: Check for correct field name
     if (!req.file) {
+      console.log('❌ No document file in request');
+      console.log('Request body:', req.body);
+      console.log('Request file:', req.file);
+      
       return res.status(400).json({
         success: false,
         error: "Document file is required"
       });
     }
 
-    // Verify course exists and belongs to teacher
+    console.log('✅ Document file received:', {
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path,
+      destination: req.file.destination
+    });
+
     const course = await CourseMaterial.findOne({
       _id: course_id,
       teacher_id: req.user.userId,
@@ -148,8 +175,7 @@ const uploadDocumentToCourse = async (req, res) => {
       });
     }
 
-    const documentFile = req.file;
-    const fileExt = path.extname(documentFile.originalname).toLowerCase();
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
     
     const fileTypes = {
       '.pdf': 'pdf',
@@ -164,12 +190,16 @@ const uploadDocumentToCourse = async (req, res) => {
     const documentData = {
       title: title || `Document ${course.materials.documents.length + 1}`,
       description: description || '',
-      file_url: `/uploads/courses/documents/${documentFile.filename}`,
+      // CORRECT PATH: Use the relative path from uploads folder
+      file_url: `/uploads/courses/documents/${req.file.filename}`,
       file_type: fileTypes[fileExt] || 'other',
-      file_size: documentFile.size,
+      file_size: req.file.size,
       is_public: is_public,
-      document_type: document_type
+      document_type: document_type,
+      upload_date: new Date()
     };
+
+    console.log('📄 Document data to save:', documentData);
 
     // Add document to course
     course.materials.documents.push(documentData);
@@ -189,7 +219,7 @@ const uploadDocumentToCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Upload document error:', error);
+    console.error('🚨 Upload document error:', error);
     res.status(500).json({
       success: false,
       error: "Error uploading document: " + error.message
