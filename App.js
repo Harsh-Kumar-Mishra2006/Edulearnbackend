@@ -27,13 +27,84 @@ const studentCourseRoutes = require('./routes/studentCourseRoutes');
 // Initialize express app
 const app = express();
 connectDB();
+const path = require('path');
+const fs = require('fs');
 
+// ✅ CORRECT: Dynamic file resolver with proper wildcard syntax
+// Remove the problematic dynamic route:
+// app.get('/uploads/*', (req, res) => { ... });
+
+// Instead, use this SIMPLE approach:
+
+// 1. Add a file download API endpoint
+app.get('/api/download-file', (req, res) => {
+  try {
+    const { filepath } = req.query;
+    
+    if (!filepath) {
+      return res.status(400).json({ error: 'File path is required' });
+    }
+    
+    console.log('📥 Download request for:', filepath);
+    
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    // Remove leading /uploads/ if present
+    let relativePath = filepath;
+    if (filepath.startsWith('/uploads/')) {
+      relativePath = filepath.substring('/uploads/'.length);
+    }
+    
+    // Try multiple possible locations
+    let fullPath;
+    
+    if (isProduction) {
+      // Production paths (Render)
+      fullPath = path.join('/tmp', 'uploads', relativePath);
+      if (!fs.existsSync(fullPath)) {
+        fullPath = path.join(process.cwd(), 'uploads', relativePath);
+      }
+      if (!fs.existsSync(fullPath)) {
+        const filename = path.basename(relativePath);
+        fullPath = path.join('/tmp', 'uploads', 'courses', 'documents', filename);
+      }
+      if (!fs.existsSync(fullPath)) {
+        const filename = path.basename(relativePath);
+        fullPath = path.join('/tmp', 'uploads', 'courses', 'videos', filename);
+      }
+    } else {
+      // Local development
+      fullPath = path.join(__dirname, 'uploads', relativePath);
+    }
+    
+    console.log('🔍 Checking file at:', fullPath);
+    
+    if (!fs.existsSync(fullPath)) {
+      console.log('❌ File not found');
+      return res.status(404).json({ 
+        error: 'File not found',
+        searched: fullPath
+      });
+    }
+    
+    console.log('✅ Serving file:', fullPath);
+    res.download(fullPath);
+    
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Keep your static middleware for direct access
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Add after importing assignmentRoutes
 console.log('🔍 [APP.JS] Assignment routes imported:', assignmentRoutes ? 'YES' : 'NO');
 console.log('🔍 [APP.JS] Checking assignmentRoutes object:', {
   stack: assignmentRoutes.stack ? `Has ${assignmentRoutes.stack.length} routes` : 'No stack',
   name: assignmentRoutes.name || 'No name'
 });
+
 // CORS configuration - FIXED for production + local
 const allowedOrigins = [
   'http://localhost:5173',
@@ -57,7 +128,6 @@ app.use(cors(corsOptions));
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 
 // Add these debug routes to app.js
 app.get('/api/debug/auth-check', async (req, res) => {
@@ -92,6 +162,7 @@ app.get('/api/debug/auth-check', async (req, res) => {
     });
   }
 });
+
 // Add this to app.js
 app.get('/api/debug/course-categories', async (req, res) => {
   try {
@@ -170,70 +241,6 @@ app.get('/api/debug/courses-public', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Course Registration API is running!',
-    endpoints: {
-      personal: '/api/personal/save',
-      background: '/api/background/save', 
-      course: '/api/course/save',
-      signup: '/api/auth/signup',
-      login: '/api/auth/login',
-      logout: '/api/auth/logout',
-      payment: '/api/payment',
-      getProfile: '/api/auth/profile',
-      updateProfile: '/api/auth/profile',
-      getStudentRecords: '/api/teacher/student-records',
-      updatePaymentStatus: '/api/teacher/payment/:id/status',
-      addTeacher: '/api/admin/teachers/add',
-      getAllTeachers: '/api/admin/teachers/all',
-      getTeacherStats: '/api/admin/teachers/stats',
-      getTeacherById: '/api/admin/teachers/:id',
-      updateTeacher: '/api/admin/teachers/:id',
-      deleteTeachers: '/api/admin/teachers/:id',
-      createCourse: '/api/course-materials/courses',
-      getTeacherCourses: '/api/course-materials/courses',
-      getCourseDetails: 'api/course-materials/courses/:course_id',
-      updateCourseStatus: 'api/course-materials/courses/:course_id/status',
-      updateCourseInfo: 'api/course-materials/courses/:course_id/info',
-      reorderVideos: 'api/course-materials/courses/:course_id/reorder-videos',
-      uploadVideoToCourse: 'api/course-materials/courses/:course_id/videos',
-      uploadDocumentToCourse: 'api/course-materials/courses/:course_id/documents',
-      deleteCourseMaterial: 'api/course-materials/courses/:course_id/materials/:material_type/:material_id',
-      checkTeacherAuthorization: '/api/auth/check-teacher',
-      getCourseMaterials: '/api/course-materials/courses/:course_id/materials',
-      updateVideoInfo: '/api/course-materials/courses/:course_id/videos/:video_id',
-      updateDocumentInfo: '/api/course-materials/courses/:course_id/documents/:document_id',
-      // FIXED: Update these endpoints to match the correct path
-      getMyCourses: '/api/teacher/my-courses/',
-      getCourseStatistics: '/api/teacher/my-courses/statistics',
-      getCourseWithMaterials: '/api/teacher/my-courses/:course_id',
-      getCourseMaterialsByType: '/api/teacher/my-courses/:course_id/materials/:material_type',
-      deleteCourse: '/api/teacher/my-courses/:course_id',
-      addMeetingToCourse: '/api//courses/:course_id/meetings',
-      getCourseMeetings: '/api/courses/:course_id/meetings',
-      updateMeetingInfo: '/api/courses/:course_id/meetings/:meeting_id',
-      deleteMeeting: '/api/courses/:course_id/meetings/:meeting_id',
-      reorderMeetings: '/api/courses/:course_id/reorder-meetings',
-      getMyLearningCourses: '/api/my-learning/courses',
-      getCategoryMaterials: '/api/my-learning/courses/:category',
-      markMaterialCompleted: '/api/my-learning/progress/:category/:material_type/:material_id',
-      getLearningProgress: '/api/my-learning/progress',
-      processPayment: '/api/payment/process',
-      verifyPayment: '/api/payment/verify/:paymentId',
-      getPaymentStatus: '/api/payment/status/:student_email',
-      debugStudentData: '/api/my-learning/debug',
-      uploadCertificate: '/api/certificates/upload',
-      getAllCertificates: '/api/certificates',
-      getCertificateById: '/api/certificates/:id',
-      downloadCertificate: '/api/certificates/:id/download',
-      revokeCertificate: '/api/certificates/:id/revoke',
-      createQuiz: '/api/quiz/teacher/quizzes',
-      getTeacherQuizzes: '/api/quiz/teacher/quizzes',
-      getQuizDetails: '/api/quiz/teacher/quizzes/:quiz_id',
-      updateQuizStatus: '/api/quiz/teacher/quizzes/:quiz_id/status',
-      updateQuizSettings: '/api/quiz/teacher/quizzes/:quiz_id/settings',
-      getQuizAttempts: '/api/quiz/teacher/quizzes/:quiz_id/attempts',
-      getStudentQuizzes: '/api/quiz/student/quizzes',
-      startQuizAttempt: '/api/quiz/student/quizzes/:quiz_id/start',
-    }
   });
 });
 
@@ -251,7 +258,10 @@ app.use('/api/certificates', CertificateRoutes);
 app.use('/api/my-learning', Mylearning);
 app.use('/api/quiz', QuestionRoutes);
 app.use('/api/certificates', CertificateRoutes);
-app.use('/uploads', express.static('uploads'));
+
+// ❌ REMOVE THIS DUPLICATE LINE (line ~149 in your original code):
+// app.use('/uploads', express.static('uploads'));
+
 app.use('/api/teacher/courses', newCourse);
 app.use('/api/email', emailRoutes);
 app.use('/api/test/email-test', testEmailRoute);

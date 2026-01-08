@@ -10,7 +10,6 @@ const {
   deleteCourse,
   getCourseStatistics,
   bulkUpdateCourses,
-  getPublishedCoursesForStudents
 } = require('../controllers/newCourseController');
 
 const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
