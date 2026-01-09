@@ -1,4 +1,3 @@
-// routes/adminCourseRoutes.js
 const express = require('express');
 const router = express.Router();
 const {
@@ -15,16 +14,17 @@ const {
 const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
 const { uploadCourseImage } = require('../config/newCourseImageUpload');
 
-// ============ TEACHER ROUTES ============
-router.use('/teacher', teacherAuth); // Apply to all teacher routes
+// ✅ Apply teacherAuth to all routes in this file
+router.use(teacherAuth);
 
-router.post('/teacher', uploadCourseImage, createCourse);
-router.get('/teacher', getAllCourses);
-router.get('/teacher/stats', getCourseStatistics);
-router.get('/teacher/:id', getCourseById);
-router.put('/teacher/:id', uploadCourseImage, updateCourse);
-router.put('/teacher/:id/status', updateCourseStatus);
-router.delete('/teacher/:id', deleteCourse);
-router.post('/teacher/bulk-update', bulkUpdateCourses);
+// ✅ Define routes without duplicate /teacher
+router.post('/', uploadCourseImage, createCourse); // POST /api/teacher/courses
+router.get('/', getAllCourses); // GET /api/teacher/courses
+router.get('/stats', getCourseStatistics); // GET /api/teacher/courses/stats
+router.get('/:id', getCourseById); // GET /api/teacher/courses/:id
+router.put('/:id', uploadCourseImage, updateCourse); // PUT /api/teacher/courses/:id
+router.put('/:id/status', updateCourseStatus); // PUT /api/teacher/courses/:id/status
+router.delete('/:id', deleteCourse); // DELETE /api/teacher/courses/:id
+router.post('/bulk-update', bulkUpdateCourses); // POST /api/teacher/courses/bulk-update
 
 module.exports = router;
