@@ -1,28 +1,28 @@
-// In config/courseupload.js - simplified version
+// config/courseupload.js - UPDATED VERSION
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Determine upload directory based on environment
+// Use absolute path for uploads
 const getUploadDir = () => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  // Always use a consistent directory
+  const baseDir = process.cwd();
+  const uploadDir = path.join(baseDir, 'uploads');
   
-  if (isProduction) {
-    // Render: use /tmp directory
-    const tmpDir = path.join('/tmp', 'uploads');
-    console.log('🚀 PRODUCTION: Using upload directory:', tmpDir);
-    return tmpDir;
-  } else {
-    // Local: use project uploads directory
-    const localDir = path.join(__dirname, '..', 'uploads');
-    console.log('💻 LOCAL: Using upload directory:', localDir);
-    return localDir;
+  console.log('📁 Upload directory:', uploadDir);
+  
+  // Create directory if it doesn't exist
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('✅ Created upload directory:', uploadDir);
   }
+  
+  return uploadDir;
 };
 
 const UPLOAD_DIR = getUploadDir();
 
-// Ensure directories exist
+// Ensure subdirectories exist
 const createDirs = () => {
   const dirs = [
     path.join(UPLOAD_DIR, 'courses', 'videos'),
@@ -52,6 +52,7 @@ const storage = multer.diskStorage({
       uploadPath = path.join(uploadPath, 'courses', 'thumbnails');
     }
     
+    console.log('📂 Destination path:', uploadPath);
     cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
@@ -62,22 +63,19 @@ const storage = multer.diskStorage({
       .replace(/[^a-zA-Z0-9_\-.]/g, '');
     
     const filename = name + '-' + uniqueSuffix + ext;
-    console.log(`💾 Saving ${file.fieldname} as: ${filename}`);
+    console.log(`💾 Saving file as: ${filename}`);
     cb(null, filename);
   }
 });
 
-
-// File filter with 2GB limit
+// File filter (same as before)
 const fileFilter = (req, file, cb) => {
-  const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
+  const maxSize = 2 * 1024 * 1024 * 1024;
 
-  // Check file size
   if (file.size > maxSize) {
     return cb(new Error('File size exceeds 2GB limit'), false);
   }
 
-  // Videos
   if (file.fieldname === 'video') {
     const allowedVideoTypes = [
       'video/mp4',
@@ -93,9 +91,7 @@ const fileFilter = (req, file, cb) => {
     } else {
       cb(new Error('Only video files (MP4, MKV, AVI, MOV, WMV, WebM) are allowed!'), false);
     }
-  }
-  // Documents
-  else if (file.fieldname === 'document') {
+  } else if (file.fieldname === 'document') {
     const allowedDocs = [
       'application/pdf',
       'application/msword',
@@ -111,30 +107,26 @@ const fileFilter = (req, file, cb) => {
     } else {
       cb(new Error('Only document files (PDF, DOC, PPT, TXT, ZIP) are allowed!'), false);
     }
-  }
-  // Thumbnails
-  else if (file.fieldname === 'thumbnail') {
+  } else if (file.fieldname === 'thumbnail') {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
       cb(new Error('Only image files are allowed for thumbnails!'), false);
     }
-  }
-  else {
+  } else {
     cb(new Error('Unexpected file type!'), false);
   }
 };
 
-// Initialize multer with 2GB limit
 const upload = multer({
   storage: storage,
   limits: { fileSize: 2 * 1024 * 1024 * 1024 },
   fileFilter: fileFilter
 });
 
-
 module.exports = {
   uploadVideo: upload.single('video'),
   uploadDocument: upload.single('document'),
+  uploadThumbnail: upload.single('thumbnail'),
   UPLOAD_DIR
 };

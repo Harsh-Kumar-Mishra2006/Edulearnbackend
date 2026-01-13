@@ -24,6 +24,20 @@ const studentEnrollmentSchema = new mongoose.Schema({
     ],
     default: 'other'
   },
+   course_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  },
+  
+  course_title: {
+    type: String
+  },
+  
+  course_type: {
+    type: String,
+    enum: ['hardcoded', 'database'],
+    default: 'hardcoded'
+  },
   enrollment_date: {
     type: Date,
     default: Date.now

@@ -21,7 +21,7 @@ const {
 } = require('../controllers/courseMaterialController');
 
 const { teacherAuth } = require('../middlewares/teacherauthMiddleware');
-const { uploadVideo, uploadDocument } = require('../config/courseupload');
+const { uploadVideo, uploadDocument } = require('../config/cloudinaryStorage')
 
 router.use(teacherAuth);
 

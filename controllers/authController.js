@@ -115,9 +115,12 @@ const checkTeacherAuthorization = async (req, res) => {
   }
 };
 
-// Signup controller with role support
+// Update signup controller to save profile data
 const signup = async (req, res) => {
-  let { name, email, username,phone, password, role = 'student', profile = {} } = req.body;
+  let { name, email, username, phone, password, role = 'student', profile = {} } = req.body;
+
+  // Extract additional profile fields
+  const { age, gender, dob } = req.body;
 
   if (!name || !email || !password || !username || !phone) {
     return res.status(400).json({ 
@@ -152,6 +155,14 @@ const signup = async (req, res) => {
     const salt = await bcryptjs.genSalt(10);
     const hash = await bcryptjs.hash(password, salt);
     
+    // Prepare profile data for students
+    const studentProfile = role === 'student' ? {
+      ...profile,
+      age: age || '',
+      gender: gender || '',
+      dob: dob || ''
+    } : profile;
+    
     const createuser = await auth.create({ 
       name,
       email, 
@@ -159,7 +170,7 @@ const signup = async (req, res) => {
       phone,
       password: hash,
       role,
-      profile
+      profile: studentProfile
     });
 
     res.status(201).json({
@@ -285,10 +296,23 @@ const login = async (req, res) => {
     });
   }
 };
-// Get current user profile
+// In authController.js - Update getProfile function
+// In authController.js - getProfile function
 const getProfile = async (req, res) => {
   try {
-    const token = req.cookies.token;
+    console.log('=== GET PROFILE ===');
+    console.log('Headers:', req.headers);
+    
+    // Try multiple ways to get token
+    let token = req.header('Authorization') || req.headers.authorization;
+    
+    if (token) {
+      token = token.replace('Bearer ', '');
+      console.log('Token from Authorization header:', token.substring(0, 50) + '...');
+    } else {
+      token = req.cookies?.token;
+      console.log('Token from cookie:', token ? 'Yes' : 'No');
+    }
     
     if (!token) {
       return res.status(401).json({
@@ -296,43 +320,160 @@ const getProfile = async (req, res) => {
         error: 'No token provided'
       });
     }
-
-    const decoded = jwt.verify(token, 'mypassword');
-    const user = await auth.findById(decoded.userId).select('-password');
     
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        username: user.username,
-        role: user.role,
-        profile: user.profile,
-        isVerified: user.isVerified
+    console.log('Token length:', token.length);
+    
+    // Clean token - remove quotes and whitespace
+    token = token.trim().replace(/^["']|["']$/g, '');
+    console.log('Cleaned token (first 50):', token.substring(0, 50) + '...');
+    
+    try {
+      // Try to verify
+      const decoded = jwt.verify(token, 'mypassword');
+      console.log('✅ Token verified for user:', decoded.userId);
+      
+      const user = await auth.findById(decoded.userId).select('-password');
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
+        });
       }
-    });
-
+      
+      console.log('✅ User found:', user.email);
+      
+      return res.json({
+        success: true,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          username: user.username,
+          phone: user.phone,
+          role: user.role,
+          profile: user.profile,
+          isVerified: user.isVerified
+        }
+      });
+      
+    } catch (jwtError) {
+      console.log('❌ JWT Error:', jwtError.message);
+      
+      // Try to decode without verification to see what's wrong
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          console.log('JWT payload (without verification):', payload);
+          
+          // Maybe the token is expired or has wrong signature
+          return res.status(401).json({
+            success: false,
+            error: `Token error: ${jwtError.message}`,
+            decodedPayload: payload
+          });
+        } else {
+          console.log('Token is not a JWT format');
+          return res.status(401).json({
+            success: false,
+            error: 'Token is not a valid JWT format'
+          });
+        }
+      } catch (decodeError) {
+        console.log('Cannot decode token at all:', decodeError.message);
+        return res.status(401).json({
+          success: false,
+          error: `Invalid token: ${decodeError.message}`
+        });
+      }
+    }
+    
   } catch (err) {
-    console.log(err);
-    res.status(401).json({
+    console.log('Server error:', err);
+    res.status(500).json({
       success: false,
-      error: 'Invalid token'
+      error: 'Server error'
     });
   }
 };
 
-// Update user profile
+// In authController.js - debugToken function
+const debugToken = async (req, res) => {
+  try {
+    console.log('=== DEBUG TOKEN ENDPOINT HIT ===');
+    
+    let token = req.header('Authorization') || req.headers.authorization;
+    
+    if (token) {
+      token = token.replace('Bearer ', '');
+    } else {
+      token = req.cookies?.token;
+    }
+    
+    if (!token) {
+      return res.json({
+        success: false,
+        error: 'No token provided',
+        message: 'Please send token in Authorization header'
+      });
+    }
+    
+    // Clean token
+    token = token.trim().replace(/^["']|["']$/g, '');
+    
+    const result = {
+      success: true,
+      tokenInfo: {
+        length: token.length,
+        first50Chars: token.substring(0, 50),
+        last50Chars: token.substring(token.length - 50),
+        isJWTFormat: token.split('.').length === 3
+      }
+    };
+    
+    // Try to decode
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      try {
+        const header = JSON.parse(Buffer.from(parts[0], 'base64').toString());
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        
+        result.tokenInfo.decoded = {
+          header,
+          payload
+        };
+        
+        // Try to verify
+        try {
+          const verified = jwt.verify(token, 'mypassword');
+          result.tokenInfo.verified = true;
+          result.tokenInfo.verificationResult = verified;
+        } catch (verifyError) {
+          result.tokenInfo.verified = false;
+          result.tokenInfo.verificationError = verifyError.message;
+        }
+        
+      } catch (decodeError) {
+        result.tokenInfo.decodeError = decodeError.message;
+      }
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// Update updateProfile controller
 const updateProfile = async (req, res) => {
   try {
-    const { name, profile } = req.body;
+    const { name, profile, age, gender, dob, phone } = req.body;
     const token = req.cookies.token;
     
     if (!token) {
@@ -352,9 +493,25 @@ const updateProfile = async (req, res) => {
       });
     }
 
-    // Update fields
+    // Update basic fields
     if (name) user.name = name;
-    if (profile) user.profile = { ...user.profile, ...profile };
+    if (phone) user.phone = phone;
+
+    // Update profile fields (especially for students)
+    const updatedProfile = { ...user.profile };
+    
+    if (profile) {
+      Object.assign(updatedProfile, profile);
+    }
+    
+    // Update specific student profile fields
+    if (user.role === 'student') {
+      if (age !== undefined) updatedProfile.age = age;
+      if (gender) updatedProfile.gender = gender;
+      if (dob) updatedProfile.dob = dob;
+    }
+
+    user.profile = updatedProfile;
 
     await user.save();
 
@@ -366,6 +523,7 @@ const updateProfile = async (req, res) => {
         name: user.name,
         email: user.email,
         username: user.username,
+        phone: user.phone,
         role: user.role,
         profile: user.profile
       }
@@ -379,6 +537,7 @@ const updateProfile = async (req, res) => {
     });
   }
 };
+
 
 // Logout controller
 const logout = async (req, res) => {
@@ -409,6 +568,7 @@ module.exports = {
   login,
   logout,
   getProfile,
+  debugToken,
   updateProfile,
   checkTeacherAuthorization
 };

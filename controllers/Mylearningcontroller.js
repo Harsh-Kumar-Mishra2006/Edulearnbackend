@@ -2,6 +2,56 @@ const StudentEnrollment = require('../models/Mylearningmodel');
 const CourseMaterial = require('../models/courseMaterialdata');
 
 // Helper function to get display names for categories
+
+// Add this helper function at the top of Mylearningcontroller.js
+const formatCloudinaryUrlForStudent = (url, fileType) => {
+  if (!url) return null;
+  
+  console.log('Formatting URL:', url, 'Type:', fileType);
+  
+  // If it's already a proper Cloudinary URL, return as-is
+  if (url.includes('res.cloudinary.com')) {
+    // Check if it's in the right format for viewing
+    const cloudName = 'dpsssv5tg'; // Your Cloudinary cloud name
+    
+    // For PDFs: ensure they're viewable
+    if (fileType === 'pdf' && url.includes('/upload/')) {
+      return url.replace('/upload/', '/upload/fl_attachment.name:document/');
+    }
+    
+    return url;
+  }
+  
+  // If it's a Cloudinary public_id format
+  if (url.includes('cloudinary.com')) {
+    try {
+      const parts = url.split('/');
+      const publicId = parts[parts.length - 1];
+      const resourceType = fileType === 'pdf' ? 'image' : 
+                          ['jpg', 'jpeg', 'png', 'gif'].includes(fileType) ? 'image' : 'raw';
+      
+      return `https://res.cloudinary.com/dpsssv5tg/${resourceType}/upload/${publicId}`;
+    } catch (error) {
+      console.error('Error formatting Cloudinary URL:', error);
+      return url;
+    }
+  }
+  
+  // For old upload URLs, return null (students can't access these)
+  if (url.startsWith('/uploads/')) {
+    console.warn('Old upload URL found:', url);
+    return null;
+  }
+  
+  // For relative URLs, make absolute
+  if (url.startsWith('/')) {
+    return `https://edulearnbackend-ffiv.onrender.com${url}`;
+  }
+  
+  return url;
+};
+
+
 const getCategoryDisplayName = (category) => {
   const categoryMap = {
     'web-development': 'Web Development',
@@ -92,7 +142,8 @@ const getMyLearningCourses = async (req, res) => {
               _id: video._id,
               title: video.title,
               description: video.description,
-              video_url: video.video_url,
+              video_url: formatCloudinaryUrlForStudent(video.video_url, 'mp4'),
+            isAvailable: !!formatCloudinaryUrlForStudent(video.video_url, 'mp4'),
               duration: video.duration,
               file_size: video.file_size,
               is_public: video.is_public,
@@ -109,7 +160,8 @@ const getMyLearningCourses = async (req, res) => {
               _id: doc._id,
               title: doc.title,
               description: doc.description,
-              file_url: doc.file_url,
+              file_url: formatCloudinaryUrlForStudent(doc.file_url, doc.file_type),
+            isAvailable: !!formatCloudinaryUrlForStudent(doc.file_url, doc.file_type),
               file_type: doc.file_type,
               file_size: doc.file_size,
               document_type: doc.document_type,

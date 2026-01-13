@@ -5,7 +5,8 @@ const {
   getPaymentStatus, 
   upload,
   verifyPayment,
-  getAvailableCourses
+  getAvailableCourses,
+  getCourseDetails
 } = require('../controllers/paymentController');
 
 // Process payment with screenshot upload (auto-enrolls student)
@@ -18,6 +19,8 @@ router.put('/verify/:paymentId', verifyPayment);
 router.get('/status/:student_email', getPaymentStatus);
 
 router.get('/available-courses', getAvailableCourses);
+
+router.get('/course-details/:courseTitle', getCourseDetails);
 
 
 module.exports = router;

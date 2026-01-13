@@ -1,13 +1,21 @@
+// authRoutes.js
 const express = require('express');
-const { login, signup, logout, getProfile, updateProfile,checkTeacherAuthorization } = require('../controllers/authController');
+const { login, signup, logout, getProfile, updateProfile, checkTeacherAuthorization,debugToken } = require('../controllers/authController');
+const authenticateToken = require('../middlewares/authMiddleware'); // Add this
 const router = express.Router();
 
+// PUBLIC ROUTES (no authentication required)
 router.post('/login', login);
 router.post('/signup', signup);
 router.post('/logout', logout);
+
+// PROTECTED ROUTES (authentication required)
 router.get('/profile', getProfile);
-router.put('/profile', updateProfile);
-router.get('/check-teacher', checkTeacherAuthorization);
+router.get('/debug-token', debugToken);
+router.put('/profile', authenticateToken, updateProfile);
+router.get('/check-teacher', authenticateToken, checkTeacherAuthorization); // Also protect this
+
+// Debug route (optional, can be public or protected)
 router.get('/debug-auth', async (req, res) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -58,4 +66,5 @@ router.get('/debug-auth', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 module.exports = router;

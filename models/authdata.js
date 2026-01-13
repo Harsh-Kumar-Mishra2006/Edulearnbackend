@@ -1,55 +1,30 @@
+// models/authdata.js
 const mongoose = require('mongoose');
 
 const authSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, 'Name is required'],
-    trim: true
-  },
-  email: {
-    type: String,
-    required: [true, 'Email is required'],
-    unique: true,
-    trim: true,
-    lowercase: true
-  },
-  username: {
-    type: String,
-    required: [true, 'Username is required'],
-    unique: true,
-    trim: true
-  },
-  password: {
-    type: String,
-    required: [true, 'Password is required'],
-    minlength: 6
-  },
-  phone:{
-    type: String,
-    trim: true,
-    default: null
-  },
-  role: {
-    type: String,
-    enum: ['student', 'teacher', 'admin'],
-    default: 'student'
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  username: { type: String, required: true, unique: true },
+  phone: { type: String, required: true },
+  password: { type: String, required: true },
+  role: { 
+    type: String, 
+    enum: ['student', 'teacher', 'admin'], 
+    default: 'student' 
   },
   profile: {
-    bio: String,
-    specialization: [String], // For teachers
-    education: String, // For students
-    experience: String // For teachers
+    age: { type: String, default: '' },
+    gender: { type: String, default: '' },
+    dob: { type: String, default: '' },
+    // Add other profile fields as needed
+    address: { type: String, default: '' },
+    education: { type: String, default: '' },
+    bio: { type: String, default: '' },
+    avatar: { type: String, default: '' }
   },
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-  isActive: {
-    type: Boolean,
-    default: true
-  }
-}, {
-  timestamps: true
+  isVerified: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model("Auth", authSchema);
+module.exports = mongoose.model('Auth', authSchema);

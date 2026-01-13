@@ -1,8 +1,13 @@
-//controllers/courseMaterialController.js
+// controllers/courseMaterialController.js
 const CourseMaterial = require('../models/courseMaterialdata');
 const Teacher = require('../models/adminadddata');
-const { uploadVideo, uploadDocument } = require('../config/courseupload');
 const path = require('path');
+const { 
+  uploadVideo, 
+  uploadDocument, 
+  generateSignedUrl,
+  deleteFile 
+} = require('../config/cloudinaryStorage');
 
 // Create new course (only basic info)
 const createCourse = async (req, res) => {
@@ -57,31 +62,24 @@ const createCourse = async (req, res) => {
   }
 };
 
+// Upload video to course - FIXED
 const uploadVideoToCourse = async (req, res) => {
   try {
     const { course_id } = req.params;
     const { title, description, duration, is_public = true, video_order = 0 } = req.body;
 
-    // FIX: Check for the correct field name
     if (!req.file) {
-      console.log('❌ No file in request');
-      console.log('Request body:', req.body);
-      console.log('Request file:', req.file);
-      console.log('Request files:', req.files);
-      
       return res.status(400).json({
         success: false,
         error: "Video file is required"
       });
     }
 
-    console.log('✅ File received:', {
-      filename: req.file.filename,
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
+    console.log('✅ Cloudinary upload successful:', {
+      filename: req.file.originalname,
+      url: req.file.path,
       size: req.file.size,
-      path: req.file.path,
-      destination: req.file.destination
+      public_id: req.file.filename
     });
 
     const course = await CourseMaterial.findOne({
@@ -96,21 +94,17 @@ const uploadVideoToCourse = async (req, res) => {
       });
     }
 
-    // IMPORTANT: The file is already saved to 'uploads/courses/videos/' by multer
-    // So we need to construct the correct URL
     const videoData = {
       title: title || `Video ${course.materials.videos.length + 1}`,
       description: description || '',
-      // CORRECT PATH: Use the relative path from uploads folder
-      video_url: `/uploads/courses/videos/${req.file.filename}`,
+      video_url: req.file.path, // Cloudinary URL
+      public_id: req.file.filename, // Store public_id for deletion
       duration: duration || '00:00',
       file_size: req.file.size,
       is_public: is_public,
       video_order: parseInt(video_order),
       upload_date: new Date()
     };
-
-    console.log('📹 Video data to save:', videoData);
 
     // Add video to course
     course.materials.videos.push(videoData);
@@ -137,30 +131,25 @@ const uploadVideoToCourse = async (req, res) => {
     });
   }
 };
+
+// Upload document to course - FIXED
 const uploadDocumentToCourse = async (req, res) => {
   try {
     const { course_id } = req.params;
     const { title, description, is_public = true, document_type = 'notes' } = req.body;
 
-    // FIX: Check for correct field name
     if (!req.file) {
-      console.log('❌ No document file in request');
-      console.log('Request body:', req.body);
-      console.log('Request file:', req.file);
-      
       return res.status(400).json({
         success: false,
         error: "Document file is required"
       });
     }
 
-    console.log('✅ Document file received:', {
-      filename: req.file.filename,
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
+    console.log('✅ Cloudinary document upload:', {
+      filename: req.file.originalname,
+      url: req.file.path,
       size: req.file.size,
-      path: req.file.path,
-      destination: req.file.destination
+      public_id: req.file.filename
     });
 
     const course = await CourseMaterial.findOne({
@@ -175,33 +164,21 @@ const uploadDocumentToCourse = async (req, res) => {
       });
     }
 
-    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    // Get file extension
+    const fileExtension = path.extname(req.file.originalname).substring(1).toLowerCase();
     
-    const fileTypes = {
-      '.pdf': 'pdf',
-      '.doc': 'doc',
-      '.docx': 'docx',
-      '.ppt': 'ppt',
-      '.pptx': 'pptx',
-      '.txt': 'txt',
-      '.zip': 'zip'
-    };
-
     const documentData = {
       title: title || `Document ${course.materials.documents.length + 1}`,
       description: description || '',
-      // CORRECT PATH: Use the relative path from uploads folder
-      file_url: `/uploads/courses/documents/${req.file.filename}`,
-      file_type: fileTypes[fileExt] || 'other',
+      file_url: req.file.path, // Direct Cloudinary URL
+      public_id: req.file.filename, // Store public_id
+      file_type: fileExtension,
       file_size: req.file.size,
       is_public: is_public,
       document_type: document_type,
       upload_date: new Date()
     };
 
-    console.log('📄 Document data to save:', documentData);
-
-    // Add document to course
     course.materials.documents.push(documentData);
     await course.save();
 
@@ -226,8 +203,6 @@ const uploadDocumentToCourse = async (req, res) => {
     });
   }
 };
-
-// ✅ Removed uploadCertificateForStudent function
 
 // Get teacher's courses
 const getTeacherCourses = async (req, res) => {
@@ -275,9 +250,24 @@ const getCourseDetails = async (req, res) => {
       });
     }
 
+    // Ensure Cloudinary URLs are properly formatted
+    const formattedCourse = course.toObject();
+    
+    // Format video URLs
+    formattedCourse.materials.videos = formattedCourse.materials.videos.map(video => ({
+      ...video,
+      video_url: formatCloudinaryUrl(video.video_url, 'video')
+    }));
+    
+    // Format document URLs
+    formattedCourse.materials.documents = formattedCourse.materials.documents.map(doc => ({
+      ...doc,
+      file_url: formatCloudinaryUrl(doc.file_url, 'raw')
+    }));
+
     res.json({
       success: true,
-      data: course
+      data: formattedCourse
     });
 
   } catch (error) {
@@ -287,6 +277,40 @@ const getCourseDetails = async (req, res) => {
       error: "Error fetching course details: " + error.message
     });
   }
+};
+
+// Helper function to format Cloudinary URLs
+const formatCloudinaryUrl = (url, resourceType) => {
+  if (!url) return null;
+  
+  // If it's already a proper Cloudinary URL, return as-is
+  if (url.includes('res.cloudinary.com')) {
+    return url;
+  }
+  
+  // If it's a Cloudinary public_id
+  if (url.includes('cloudinary.com')) {
+    try {
+      const cloudName = 'dpsssv5tg'; // Your Cloudinary cloud name
+      const folder = resourceType === 'video' ? 'video/upload' : 'raw/upload';
+      
+      // Extract public_id from URL
+      const parts = url.split('/');
+      const publicId = parts[parts.length - 1];
+      
+      return `https://res.cloudinary.com/${cloudName}/${folder}/${publicId}`;
+    } catch (error) {
+      console.error('Error formatting Cloudinary URL:', error);
+      return url;
+    }
+  }
+  
+  // For relative URLs, make them absolute
+  if (url.startsWith('/')) {
+    return `https://edulearnbackend-ffiv.onrender.com${url}`;
+  }
+  
+  return url;
 };
 
 // Update course status (publish/draft/archive)
@@ -370,7 +394,7 @@ const updateCourseInfo = async (req, res) => {
   }
 };
 
-// Delete course material (video/document)
+// Delete course material
 const deleteCourseMaterial = async (req, res) => {
   try {
     const { course_id, material_type, material_id } = req.params;
@@ -394,7 +418,7 @@ const deleteCourseMaterial = async (req, res) => {
       });
     }
 
-    // Remove the material from array
+    // Find the material
     const materialArray = course.materials[material_type];
     const materialIndex = materialArray.findIndex(item => item._id.toString() === material_id);
 
@@ -405,6 +429,15 @@ const deleteCourseMaterial = async (req, res) => {
       });
     }
 
+    const material = materialArray[materialIndex];
+    
+    // Delete from Cloudinary if public_id exists
+    if (material.public_id) {
+      const resourceType = material_type === 'videos' ? 'video' : 'raw';
+      await deleteFile(material.public_id, resourceType);
+    }
+
+    // Remove from array
     materialArray.splice(materialIndex, 1);
     await course.save();
 
@@ -463,6 +496,7 @@ const reorderVideos = async (req, res) => {
     });
   }
 };
+
 // Get course materials (videos & documents)
 const getCourseMaterials = async (req, res) => {
   try {
@@ -480,12 +514,23 @@ const getCourseMaterials = async (req, res) => {
       });
     }
 
+    // Format URLs for Cloudinary
+    const videos = course.materials.videos.map(video => ({
+      ...video.toObject(),
+      video_url: formatCloudinaryUrl(video.video_url, 'video')
+    }));
+
+    const documents = course.materials.documents.map(doc => ({
+      ...doc.toObject(),
+      file_url: formatCloudinaryUrl(doc.file_url, 'raw')
+    }));
+
     res.json({
       success: true,
       data: {
         course_title: course.course_title,
-        videos: course.materials.videos,
-        documents: course.materials.documents
+        videos: videos,
+        documents: documents
       }
     });
 
@@ -883,8 +928,6 @@ module.exports = {
   updateCourseInfo,
   deleteCourseMaterial,
   reorderVideos,
-  uploadVideo,
-  uploadDocument,
   getCourseMaterials,
   updateVideoInfo,
   updateDocumentInfo,

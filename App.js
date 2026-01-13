@@ -236,7 +236,11 @@ app.get('/api/debug/courses-public', async (req, res) => {
     });
   }
 });
-
+// For Render specifically, you might need this:
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 // Basic route for testing
 app.get('/', (req, res) => {
   res.json({ 
