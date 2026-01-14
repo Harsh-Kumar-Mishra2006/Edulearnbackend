@@ -1,107 +1,119 @@
-// config/cloudinaryStorage.js - FIXED VERSION
+// config/cloudinaryStorage.js - FIXED
 const cloudinary = require('./cloudinaryConfig');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
+const path = require('path');
 
-// Video storage (unchanged)
+// Debug Cloudinary configuration
+console.log('🔄 Initializing Cloudinary Storage...');
+console.log('Cloud Name:', cloudinary.config().cloud_name);
+
+// Video storage configuration
 const videoStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: (req) => {
-      const courseId = req.params.course_id || 'general';
-      return `edulearn/courses/${courseId}/videos`;
-    },
-    resource_type: 'video',
-    allowed_formats: ['mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'webm'],
-    format: 'mp4',
-    public_id: (req, file) => {
-      const timestamp = Date.now();
-      const name = file.originalname.replace(/\.[^/.]+$/, "");
-      const safeName = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-      return `${safeName}_${timestamp}`;
-    }
+  params: async (req, file) => {
+    const courseId = req.params.course_id || 'general';
+    const timestamp = Date.now();
+    const originalName = file.originalname;
+    const nameWithoutExt = path.parse(originalName).name;
+    const safeName = nameWithoutExt.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+    
+    return {
+      folder: `edulearn/courses/${courseId}/videos`,
+      resource_type: 'video',
+      allowed_formats: ['mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'webm'],
+      format: async (req, file) => path.parse(file.originalname).ext.substring(1) || 'mp4',
+      public_id: `${safeName}_${timestamp}`,
+      chunk_size: 6000000, // 6MB chunks for better upload
+      eager: [
+        { format: 'mp4', quality: 'auto' }
+      ]
+    };
   }
 });
 
-// **FIXED: Document storage for viewable files**
+// Document storage configuration
 const documentStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const courseId = req.params.course_id || 'general';
     const timestamp = Date.now();
-    const name = file.originalname.replace(/\.[^/.]+$/, "");
-    const safeName = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    const originalName = file.originalname;
+    const nameWithoutExt = path.parse(originalName).name;
+    const safeName = nameWithoutExt.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+    const ext = path.parse(originalName).ext.substring(1).toLowerCase();
     
-    // Determine file type
-    const ext = file.originalname.split('.').pop().toLowerCase();
+    // Determine resource type
+    let resourceType = 'raw';
+    let format = ext;
     
-    // For PDFs: upload as image resource to make them viewable
+    // PDFs as images for preview
     if (ext === 'pdf') {
-      return {
-        folder: `edulearn/courses/${courseId}/documents`,
-        resource_type: 'image', // PDFs can be treated as images for viewing
-        format: 'pdf', // Keep as PDF
-        public_id: `${safeName}_${timestamp}`,
-        pages: true // Enable multi-page for PDFs
-      };
+      resourceType = 'image';
+      format = 'pdf';
     }
     
-    // For images (jpg, png, etc.): upload as images
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
-      return {
-        folder: `edulearn/courses/${courseId}/documents`,
-        resource_type: 'image',
-        public_id: `${safeName}_${timestamp}`
-      };
+    // Images as images
+    else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) {
+      resourceType = 'image';
     }
     
-    // For other documents (doc, ppt, txt, zip): upload as raw
     return {
       folder: `edulearn/courses/${courseId}/documents`,
-      resource_type: 'raw',
-      public_id: `${safeName}_${timestamp}`
+      resource_type: resourceType,
+      public_id: `${safeName}_${timestamp}`,
+      format: format,
+      allowed_formats: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 'zip', 'jpg', 'jpeg', 'png', 'gif', 'webp'],
+      // For PDFs, enable multi-page
+      ...(ext === 'pdf' ? { pages: true } : {})
     };
   }
 });
 
-// File filter middleware (unchanged)
-const fileFilter = (allowedTypes, maxSize = 100 * 1024 * 1024) => {
+// File filter function
+const createFileFilter = (allowedMimeTypes, maxSizeMB) => {
   return (req, file, cb) => {
+    // Check file existence
     if (!file) {
       return cb(new Error('No file provided'), false);
     }
     
-    const actualMaxSize = file.fieldname === 'video' ? 2 * 1024 * 1024 * 1024 : maxSize;
-    
-    if (file.size > actualMaxSize) {
-      return cb(new Error(`File size exceeds ${actualMaxSize / (1024 * 1024)}MB limit`), false);
+    // Check file size
+    const maxSize = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSize) {
+      return cb(new Error(`File size exceeds ${maxSizeMB}MB limit`), false);
     }
-
-    if (allowedTypes.includes(file.mimetype)) {
+    
+    // Check MIME type
+    if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Invalid file type. Allowed: ${allowedTypes.join(', ')}`), false);
+      cb(new Error(`Invalid file type. Allowed: ${allowedMimeTypes.join(', ')}`), false);
     }
   };
 };
 
-// Create multer upload instances
+// Video upload middleware
 const uploadVideo = multer({
   storage: videoStorage,
-  fileFilter: fileFilter([
+  fileFilter: createFileFilter([
     'video/mp4',
-    'video/x-msvideo',
     'video/quicktime',
+    'video/x-msvideo',
     'video/x-ms-wmv',
     'video/x-flv',
     'video/x-matroska',
     'video/webm'
-  ], 2 * 1024 * 1024 * 1024)
+  ], 500), // 500MB limit for videos
+  limits: {
+    fileSize: 500 * 1024 * 1024 // 500MB
+  }
 }).single('video');
 
+// Document upload middleware
 const uploadDocument = multer({
   storage: documentStorage,
-  fileFilter: fileFilter([
+  fileFilter: createFileFilter([
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -113,65 +125,68 @@ const uploadDocument = multer({
     'image/jpeg',
     'image/png',
     'image/gif',
-    'image/webp'
-  ], 50 * 1024 * 1024)
+    'image/webp',
+    'image/bmp'
+  ], 50), // 50MB limit for documents
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB
+  }
 }).single('document');
 
-// **NEW: Helper to generate viewable URLs**
-const getViewableUrl = (publicId, fileType) => {
-  try {
-    const cloudName = cloudinary.config().cloud_name;
-    
-    // For PDFs: use special viewer URL
-    if (fileType === 'pdf') {
-      return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}.pdf`;
-    }
-    
-    // For images: standard image URL
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
-      return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
-    }
-    
-    // For other files: raw URL (will download, not view)
-    return `https://res.cloudinary.com/${cloudName}/raw/upload/${publicId}`;
-    
-  } catch (error) {
-    console.error('Error generating viewable URL:', error);
-    throw error;
+// Helper function to get Cloudinary URL
+const getCloudinaryUrl = (publicId, resourceType = 'video', transformation = '') => {
+  const cloudName = cloudinary.config().cloud_name;
+  let url = '';
+  
+  switch(resourceType) {
+    case 'video':
+      url = `https://res.cloudinary.com/${cloudName}/video/upload/${transformation}${publicId}`;
+      break;
+    case 'image':
+      url = `https://res.cloudinary.com/${cloudName}/image/upload/${transformation}${publicId}`;
+      break;
+    case 'raw':
+      url = `https://res.cloudinary.com/${cloudName}/raw/upload/${transformation}${publicId}`;
+      break;
+    default:
+      url = `https://res.cloudinary.com/${cloudName}/raw/upload/${transformation}${publicId}`;
   }
+  
+  return url;
 };
 
-// **NEW: Helper to generate downloadable URLs**
-const getDownloadableUrl = (publicId, fileType, originalName) => {
-  try {
-    const cloudName = cloudinary.config().cloud_name;
-    
-    // Add fl_attachment flag to force download
-    if (fileType === 'pdf') {
-      return `https://res.cloudinary.com/${cloudName}/image/upload/fl_attachment:${encodeURIComponent(originalName)}/${publicId}.pdf`;
-    }
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
-      return `https://res.cloudinary.com/${cloudName}/image/upload/fl_attachment:${encodeURIComponent(originalName)}/${publicId}`;
-    }
-    
-    return `https://res.cloudinary.com/${cloudName}/raw/upload/fl_attachment:${encodeURIComponent(originalName)}/${publicId}`;
-    
-  } catch (error) {
-    console.error('Error generating downloadable URL:', error);
-    throw error;
-  }
+// Helper function to get thumbnail URL for videos
+const getVideoThumbnail = (publicId, time = '00:00:01') => {
+  const cloudName = cloudinary.config().cloud_name;
+  return `https://res.cloudinary.com/${cloudName}/video/upload/so_${time},w_300,h_200,c_fill/${publicId}.jpg`;
 };
 
+// Delete file from Cloudinary
 const deleteFile = async (publicId, resourceType = 'image') => {
   try {
+    console.log('🗑️ Deleting from Cloudinary:', { publicId, resourceType });
+    
     const result = await cloudinary.uploader.destroy(publicId, {
       resource_type: resourceType,
       invalidate: true
     });
+    
+    console.log('✅ Delete result:', result);
     return result.result === 'ok';
   } catch (error) {
-    console.error('Error deleting from Cloudinary:', error);
+    console.error('❌ Error deleting from Cloudinary:', error);
+    return false;
+  }
+};
+
+// Test Cloudinary connection
+const testCloudinaryConnection = async () => {
+  try {
+    const result = await cloudinary.api.ping();
+    console.log('✅ Cloudinary connection test:', result);
+    return result.status === 'ok';
+  } catch (error) {
+    console.error('❌ Cloudinary connection failed:', error.message);
     return false;
   }
 };
@@ -180,7 +195,8 @@ module.exports = {
   cloudinary,
   uploadVideo,
   uploadDocument,
-  getViewableUrl,
-  getDownloadableUrl,
-  deleteFile
+  getCloudinaryUrl,
+  getVideoThumbnail,
+  deleteFile,
+  testCloudinaryConnection
 };

@@ -62,53 +62,64 @@ const createCourse = async (req, res) => {
   }
 };
 
-// Upload video to course - FIXED
+// controllers/courseMaterialController.js - FIXED UPLOAD FUNCTIONS
+
+// Upload video to course - IMPROVED
 const uploadVideoToCourse = async (req, res) => {
   try {
+    console.log('📤 Starting video upload...');
+    console.log('Request params:', req.params);
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file);
+
     const { course_id } = req.params;
     const { title, description, duration, is_public = true, video_order = 0 } = req.body;
 
     if (!req.file) {
+      console.error('❌ No file in request');
       return res.status(400).json({
         success: false,
         error: "Video file is required"
       });
     }
 
-    console.log('✅ Cloudinary upload successful:', {
-      filename: req.file.originalname,
-      url: req.file.path,
-      size: req.file.size,
-      public_id: req.file.filename
-    });
-
+    // Find course
     const course = await CourseMaterial.findOne({
       _id: course_id,
       teacher_id: req.user.userId
     });
 
     if (!course) {
+      console.error('❌ Course not found:', course_id);
       return res.status(404).json({
         success: false,
         error: "Course not found or access denied"
       });
     }
 
+    // Prepare video data
     const videoData = {
       title: title || `Video ${course.materials.videos.length + 1}`,
       description: description || '',
       video_url: req.file.path, // Cloudinary URL
-      public_id: req.file.filename, // Store public_id for deletion
+      thumbnail_url: getVideoThumbnail(req.file.filename), // Add thumbnail
+      public_id: req.file.filename, // Cloudinary public ID
       duration: duration || '00:00',
       file_size: req.file.size,
+      mimetype: req.file.mimetype,
+      original_name: req.file.originalname,
       is_public: is_public,
       video_order: parseInt(video_order),
       upload_date: new Date()
     };
 
+    console.log('✅ Video data prepared:', videoData);
+
     // Add video to course
     course.materials.videos.push(videoData);
     await course.save();
+
+    console.log('✅ Video saved to database');
 
     res.json({
       success: true,
@@ -125,6 +136,7 @@ const uploadVideoToCourse = async (req, res) => {
 
   } catch (error) {
     console.error('🚨 Upload video error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: "Error uploading video: " + error.message
@@ -132,32 +144,33 @@ const uploadVideoToCourse = async (req, res) => {
   }
 };
 
-// Upload document to course - FIXED
+// Upload document to course - IMPROVED
 const uploadDocumentToCourse = async (req, res) => {
   try {
+    console.log('📤 Starting document upload...');
+    console.log('Request params:', req.params);
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file);
+
     const { course_id } = req.params;
     const { title, description, is_public = true, document_type = 'notes' } = req.body;
 
     if (!req.file) {
+      console.error('❌ No file in request');
       return res.status(400).json({
         success: false,
         error: "Document file is required"
       });
     }
 
-    console.log('✅ Cloudinary document upload:', {
-      filename: req.file.originalname,
-      url: req.file.path,
-      size: req.file.size,
-      public_id: req.file.filename
-    });
-
+    // Find course
     const course = await CourseMaterial.findOne({
       _id: course_id,
-      teacher_id: req.user.userId,
+      teacher_id: req.user.userId
     });
 
     if (!course) {
+      console.error('❌ Course not found:', course_id);
       return res.status(404).json({
         success: false,
         error: "Course not found or access denied"
@@ -165,22 +178,30 @@ const uploadDocumentToCourse = async (req, res) => {
     }
 
     // Get file extension
+    const path = require('path');
     const fileExtension = path.extname(req.file.originalname).substring(1).toLowerCase();
     
     const documentData = {
       title: title || `Document ${course.materials.documents.length + 1}`,
       description: description || '',
-      file_url: req.file.path, // Direct Cloudinary URL
-      public_id: req.file.filename, // Store public_id
+      file_url: req.file.path, // Cloudinary URL
+      public_id: req.file.filename, // Cloudinary public ID
       file_type: fileExtension,
       file_size: req.file.size,
+      mimetype: req.file.mimetype,
+      original_name: req.file.originalname,
       is_public: is_public,
       document_type: document_type,
       upload_date: new Date()
     };
 
+    console.log('✅ Document data prepared:', documentData);
+
+    // Add document to course
     course.materials.documents.push(documentData);
     await course.save();
+
+    console.log('✅ Document saved to database');
 
     res.json({
       success: true,
@@ -197,6 +218,7 @@ const uploadDocumentToCourse = async (req, res) => {
 
   } catch (error) {
     console.error('🚨 Upload document error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: "Error uploading document: " + error.message

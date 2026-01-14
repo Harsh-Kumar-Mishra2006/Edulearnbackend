@@ -52,6 +52,63 @@ router.put('/courses/:course_id/reorder-meetings', reorderMeetings);
 // Delete materials
 router.delete('/courses/:course_id/materials/:material_type/:material_id', deleteCourseMaterial);
 
+// Add these to your routes file
+router.get('/test-cloudinary', async (req, res) => {
+  const { testCloudinaryConnection } = require('../config/cloudinaryStorage');
+  
+  try {
+    const result = await testCloudinaryConnection();
+    
+    res.json({
+      success: result,
+      message: result ? 'Cloudinary connection OK' : 'Cloudinary connection failed',
+      cloudinary: {
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key_set: !!process.env.CLOUDINARY_API_KEY,
+        api_secret_set: !!process.env.CLOUDINARY_API_SECRET
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+router.post('/test-upload', uploadDocument, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Test upload successful',
+      file: {
+        originalname: req.file.originalname,
+        filename: req.file.filename,
+        path: req.file.path,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      },
+      cloudinary: {
+        public_id: req.file.filename,
+        url: req.file.path,
+        resource_type: req.file.resource_type
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // In your routes, add:
 router.get('/test-auth', teacherAuth, async (req, res) => {
   res.json({

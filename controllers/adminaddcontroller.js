@@ -25,7 +25,8 @@ const addTeacher = async (req, res) => {
       name,
       email,
       course,
-      phone, // ✅ Change from phone_number to phone
+      phone, // Accept phone
+  phone_number, // Also accept phone_number for compatibility
       address,
       qualification,
       years_of_experience,
@@ -33,8 +34,11 @@ const addTeacher = async (req, res) => {
       bio
     } = req.body;
 
+    const phoneValue = phone || phone_number;
+
+
     // Validation - update phone field name
-    if (!name || !email || !course || !phone || !qualification || !years_of_experience) {
+    if (!name || !email || !course || !phoneValue || !qualification || !years_of_experience) {
       console.log('🔴 Validation failed: Missing required fields');
       return res.status(400).json({
         success: false,
@@ -94,7 +98,7 @@ const addTeacher = async (req, res) => {
       name: name,
       email: email,
       username: username,
-      phone: phone, // ✅ Use phone (not phone_number)
+      phone: phoneValue, // ✅ Use phone (not phone_number)
       password: hashedPassword,
       role: 'teacher',
       profile: {
@@ -115,7 +119,7 @@ const addTeacher = async (req, res) => {
       name,
       email,
       course,
-      phone_number: phone, // ✅ Map phone to phone_number for Teacher model
+      phone_number: phoneValue, // ✅ Map phone to phone_number for Teacher model
       address,
       qualification,
       years_of_experience,
