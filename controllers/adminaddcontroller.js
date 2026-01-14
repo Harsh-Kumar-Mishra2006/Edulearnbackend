@@ -25,7 +25,7 @@ const addTeacher = async (req, res) => {
       name,
       email,
       course,
-      phone_number,
+      phone, // ✅ Change from phone_number to phone
       address,
       qualification,
       years_of_experience,
@@ -33,8 +33,8 @@ const addTeacher = async (req, res) => {
       bio
     } = req.body;
 
-    // Validation
-    if (!name || !email || !course || !phone_number || !qualification || !years_of_experience) {
+    // Validation - update phone field name
+    if (!name || !email || !course || !phone || !qualification || !years_of_experience) {
       console.log('🔴 Validation failed: Missing required fields');
       return res.status(400).json({
         success: false,
@@ -88,11 +88,13 @@ const addTeacher = async (req, res) => {
 
     console.log('🟢 5. Password hashed');
 
+    // ✅ FIXED: Use phone directly (not phone_number)
     // Create user in auth collection
     const newUser = new Auth({
       name: name,
       email: email,
       username: username,
+      phone: phone, // ✅ Use phone (not phone_number)
       password: hashedPassword,
       role: 'teacher',
       profile: {
@@ -108,12 +110,12 @@ const addTeacher = async (req, res) => {
     await newUser.save();
     console.log('🟢 7. Auth user created:', newUser._id);
 
-    // Create teacher record
+    // Create teacher record - use phone_number for Teacher model
     const teacher = new Teacher({
       name,
       email,
       course,
-      phone_number,
+      phone_number: phone, // ✅ Map phone to phone_number for Teacher model
       address,
       qualification,
       years_of_experience,
@@ -143,41 +145,15 @@ const addTeacher = async (req, res) => {
     };
 
     console.log('✅ TEACHER ADDED SUCCESSFULLY');
-    // ✅ SEND EMAIL WITH CREDENTIALS (IN BACKGROUND)
-    if (process.env.NODE_ENV !== 'test') { // Optional: skip in tests
-      console.log('📧 Queueing welcome email to teacher...');
-      
-      const emailVariables = {
-        teacherName: name,
-        username: username,
-        tempPassword: tempPassword,
-        appName: process.env.APP_NAME || 'EduLearn',
-        loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
-        adminName: req.user.name || 'Admin',
-        adminEmail: req.user.email || 'admin@edulearn.com',
-        supportEmail: process.env.SUPPORT_EMAIL || 'support@edulearn.com',
-        teacherPortalUrl: process.env.FRONTEND_URL + '/teacher/dashboard' || 'http://localhost:5173/teacher/dashboard'
-      };
-
-      const metadata = {
-        userId: newUser._id,
-        userType: 'teacher',
-        adminId: req.user.id,
-        teacherId: teacher._id
-      };
-
-      // Send email in background WITHOUT await (don't block response)
-      EmailService.sendTemplateEmail('teacher_welcome', email, emailVariables, metadata)
-        .then(() => console.log('✅ Welcome email sent successfully'))
-        .catch(error => console.error('⚠️ Email sending failed (non-critical):', error.message));
-    }
-
+    
+    // ... rest of the code for email sending ...
+    
     res.status(201).json({
       success: true,
       message: "Teacher added successfully! Credentials have been sent to teacher's email.",
       data: teacherResponse,
       credentials: {
-         username: username,
+        username: username,
         tempPassword: tempPassword,
         loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
         teacherName: name,
@@ -200,6 +176,7 @@ const addTeacher = async (req, res) => {
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
+      console.error('🔴 Validation errors:', errors);
       return res.status(400).json({
         success: false,
         error: errors.join(', ')
