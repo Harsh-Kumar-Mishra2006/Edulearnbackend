@@ -1,155 +1,173 @@
+// paymentController.js - SIMPLIFIED VERSION
 const Payment = require('../models/paymentModel');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const StudentEnrollment = require('../models/Mylearningmodel');
 const PersonalInfo = require('../models/formdatapersonal');
-const Course = require('../models/newCourseModel'); // ADD THIS IMPORT
 
-// Hardcoded course data (for backward compatibility)
+// Hardcoded course data ONLY
 const courseData = {
   'Web Development': {
-    title: 'Web Development',
-    price: 299,
-    category: 'Development',
-    duration: '12 weeks',
-    level: 'Beginner to Advanced'
+    title: "Web Development",
+    duration: "14 weeks",
+    level: "Beginner to Advanced",
+    price: 399,
+    category: "Development",
   },
   'Microsoft Office': {
-    title: 'Microsoft Office',
-    price: 99,
-    category: 'Productivity',
-    duration: '6 weeks',
-    level: 'All Levels'
+    title: "Microsoft Office",
+    duration: "8 weeks",
+    level: "All Levels",
+    price: 139,
+    category: "Productivity",
   },
-  'Mobile App Development': {
-    title: 'Mobile App Development',
-    price: 349,
-    category: 'Development',
-    duration: '10 weeks',
-    level: 'Intermediate'
+  'C programming': {
+    title: "C programming",
+    duration: "10 weeks",
+    level: "Intermediate",
+    price: 199,
+    category: "Development",
   },
-  'UI/UX Design': {
-    title: 'UI/UX Design',
-    price: 249,
-    category: 'Design',
-    duration: '8 weeks',
-    level: 'Beginner'
+  'java': {
+    title: "java",
+    duration: "10 weeks",
+    level: "Beginner",
+    price: 199,
+    category: "Development",
+  },
+  'php': {
+    title: "php",
+    duration: "12 weeks",
+    level: "All Levels",
+    price: 399,
+    category: "Development",
+  },
+  'DBMS': {
+    title: "DBMS",
+    duration: "10 weeks",
+    level: "Advanced",
+    price: 229,
+    category: "Development",
   },
   'Digital Marketing': {
-    title: 'Digital Marketing',
-    price: 199,
-    category: 'Marketing',
-    duration: '7 weeks',
-    level: 'All Levels'
-  },
-  'Graphic Design': {
-    title: 'Graphic Design',
+    title: "Digital Marketing",
+    duration: "10 weeks",
+    level: "Beginner to Intermediate",
     price: 229,
-    category: 'Design',
-    duration: '9 weeks',
-    level: 'Beginner to Intermediate'
-  }
+    category: "Marketing",
+  },
+  'Tally': {
+    title: "Tally",
+    duration: "8 weeks",
+    level: "Beginner to Intermediate",
+    price: 229,
+    category: "Productivity",
+  },
+  'Microsoft Word': {
+    title: "Microsoft Word",
+    duration: "4 weeks",
+    level: "Beginner to Intermediate",
+    price: 99,
+    category: "Productivity",
+  },
+  'Microsoft Excel': {
+    title: "Microsoft Excel",
+    duration: "4 weeks",
+    level: "Beginner to Intermediate",
+    price: 99,
+    category: "Productivity",
+  },
+  'Microsoft PowerPoint': {
+    title: "Microsoft PowerPoint",
+    duration: "4 weeks",
+    level: "Beginner to Intermediate",
+    price: 99,
+    category: "Productivity",
+  },
+  'Python': {
+    title: "Python",
+    duration: "10 weeks",
+    level: "Beginner to Intermediate",
+    price: 199,
+    category: "Development",
+  },
+  'Email & Internet': {
+    title: "Email & Internet",
+    duration: "6 weeks",
+    level: "Beginner to Intermediate",
+    price: 229,
+    category: "Productivity",
+  },
+  'Canva': {
+    title: "Canva",
+    duration: "7 weeks",
+    level: "Beginner to Advanced",
+    price: 179,
+    category: "Design",
+  },
 };
 
-// Function to get course from database or hardcoded data
-const getCourse = async (courseTitle) => {
+// SIMPLIFIED: Check if course exists in hardcoded data
+const getCourse = (courseTitle) => {
   try {
-    console.log('🔍 Looking for course:', courseTitle);
+    console.log('🔍 Checking course:', courseTitle);
     
-    // 1. First check hardcoded courses (for backward compatibility)
-    if (courseData[courseTitle]) {
-      console.log('✅ Found in hardcoded data');
+    // Clean the title
+    const cleanTitle = String(courseTitle).trim();
+    
+    // Check hardcoded courses only
+    if (courseData[cleanTitle]) {
+      console.log('✅ Found in hardcoded data:', cleanTitle);
       return {
         source: 'hardcoded',
-        data: courseData[courseTitle]
+        data: courseData[cleanTitle]
       };
     }
     
-    // 2. Check in database for newly created courses
-    const dbCourse = await Course.findOne({
-      $or: [
-        { title: courseTitle },
-        { title: { $regex: new RegExp(courseTitle, 'i') } } // Case-insensitive search
-      ],
-      status: 'published',
-      isActive: true
-    });
-    
-    if (dbCourse) {
-      console.log('✅ Found in database:', dbCourse.title);
-      return {
-        source: 'database',
-        data: {
-          title: dbCourse.title,
-          price: dbCourse.price,
-          category: dbCourse.category,
-          duration: dbCourse.duration,
-          level: dbCourse.level,
-          description: dbCourse.description,
-          isFree: dbCourse.isFree,
-          courseId: dbCourse._id // Important: Store course ID for enrollment
-        }
-      };
-    }
-    
-    console.log('❌ Course not found');
+    console.log('❌ Course not found:', cleanTitle);
+    console.log('📋 Available courses:', Object.keys(courseData));
     return null;
     
   } catch (error) {
-    console.error('Error fetching course:', error);
+    console.error('Error in getCourse:', error);
     return null;
   }
 };
 
-// After payment verification, create enrollment - UPDATED
+// SIMPLIFIED: Create enrollment for hardcoded courses only
 const createStudentEnrollment = async (payment) => {
   try {
     console.log('🟡 Creating enrollment for payment:', payment._id);
     
     // Get course info
-    const courseResult = await getCourse(payment.course_track);
+    const courseResult = getCourse(payment.course_track);
     
     if (!courseResult) {
       throw new Error(`Course "${payment.course_track}" not found`);
     }
     
     const course = courseResult.data;
-    const courseSource = courseResult.source;
     
-    // Course category mapping - UPDATED to handle new categories
+    // Course category mapping for hardcoded courses
     const courseTrackMap = {
-      // Hardcoded courses
-      'Web Development': 'web-development',
-      'Mobile App Development': 'mobile-dev',
+      'Web Development': 'development',
+      'C programming': 'development',
+      'java': 'development',
+      'php': 'development',
+      'DBMS': 'development',
+      'Python': 'development',
       'Digital Marketing': 'marketing',
       'Microsoft Office': 'productivity',
-      'UI/UX Design': 'design',
-      'Graphic Design': 'design',
-      
-      // New database courses mapping (you can expand this)
-      'Development': 'development',
-      'Design': 'design',
-      'Marketing': 'marketing',
-      'Productivity': 'productivity',
-      'Business': 'business',
-      'Technology': 'technology',
-      'Data Science': 'data-science',
-      'Personal Development': 'personal-development',
-      'Others': 'others'
+      'Tally': 'productivity',
+      'Microsoft Word': 'productivity',
+      'Microsoft Excel': 'productivity',
+      'Microsoft PowerPoint': 'productivity',
+      'Email & Internet': 'productivity',
+      'Canva': 'design'
     };
 
-    // Use course category from data or default mapping
-    let courseCategory;
-    if (courseSource === 'database' && course.courseId) {
-      // For database courses, use the course ID directly
-      courseCategory = course.courseId.toString(); // Use course ID as category for new courses
-    } else {
-      // For hardcoded courses, use the mapping
-      courseCategory = courseTrackMap[payment.course_track] || 
-                      courseTrackMap[course.category] || 
-                      course.category.toLowerCase().replace(/\s+/g, '-');
-    }
+    const courseCategory = courseTrackMap[payment.course_track] || 'other';
 
     // Get student name from personal info
     const personalInfo = await PersonalInfo.findOne({ email: payment.student_email });
@@ -167,7 +185,7 @@ const createStudentEnrollment = async (payment) => {
       return existingEnrollment;
     }
 
-    // Prepare enrollment data
+    // Create enrollment data
     const enrollmentData = {
       student_email: payment.student_email,
       student_name: studentName,
@@ -178,32 +196,16 @@ const createStudentEnrollment = async (payment) => {
       progress: {
         overall_progress: 0,
         last_accessed: new Date()
-      }
+      },
+      course_type: 'hardcoded',
+      course_title: course.title
     };
-
-    // Add course-specific data for database courses
-    if (courseSource === 'database' && course.courseId) {
-      enrollmentData.course_id = course.courseId; // Store course ID
-      enrollmentData.course_title = course.title; // Store course title
-      enrollmentData.course_type = 'database'; // Mark as database course
-    } else {
-      enrollmentData.course_type = 'hardcoded'; // Mark as hardcoded course
-    }
 
     // Create enrollment
     const enrollment = new StudentEnrollment(enrollmentData);
     await enrollment.save();
     
     console.log('✅ Student enrollment created:', enrollment._id);
-    
-    // If it's a database course, increment enrolled students count
-    if (courseSource === 'database' && course.courseId) {
-      await Course.findByIdAndUpdate(course.courseId, {
-        $inc: { studentsEnrolled: 1 }
-      });
-      console.log('📈 Updated enrolled students count for course:', course.courseId);
-    }
-    
     return enrollment;
     
   } catch (error) {
@@ -212,7 +214,7 @@ const createStudentEnrollment = async (payment) => {
   }
 };
 
-// Set up storage for uploaded files (keep as is)
+// Multer setup (keep as is)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/payments/';
@@ -227,12 +229,9 @@ const storage = multer.diskStorage({
   }
 });
 
-// Initialize multer (keep as is)
 const upload = multer({ 
   storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -242,118 +241,131 @@ const upload = multer({
   }
 });
 
-// Handle payment with screenshot upload - UPDATED
 const processPayment = async (req, res) => {
+  console.log('🚀 Payment endpoint called - START');
+  console.log('📦 Request body:', req.body);
+  console.log('📁 File received:', req.file ? 'Yes' : 'No');
+
   try {
-    console.log('=== 🟡 PAYMENT PROCESSING START ===');
-    console.log('1. Payment request received');
-    console.log('2. File received:', req.file ? 'Yes' : 'No');
-    console.log('3. Request body:', req.body);
-
     const { student_email, course_track, amount } = req.body;
-
-    // 1. Get course from database OR hardcoded data
-    console.log('🔍 Looking up course:', course_track);
-    const courseResult = await getCourse(course_track);
-
-    if (!courseResult) {
-      console.log('❌ Course not found:', course_track);
+    
+    console.log('🔍 Parsed fields:');
+    console.log('  - student_email:', student_email);
+    console.log('  - course_track:', course_track);
+    console.log('  - amount:', amount);
+    
+    // Debug: Show exact course_track
+    console.log('🔍 DETAILED COURSE CHECK:');
+    console.log('  - Raw course_track:', `"${course_track}"`);
+    console.log('  - Length:', course_track.length);
+    console.log('  - Character codes:', [...course_track].map(c => c.charCodeAt(0)));
+    
+    // Show all available courses
+    console.log('📋 AVAILABLE COURSES IN courseData:');
+    Object.keys(courseData).forEach((key, i) => {
+      console.log(`  ${i+1}. "${key}" (price: ₹${courseData[key].price})`);
+    });
+    
+    // Quick validation
+    if (!student_email) {
+      console.log('❌ Missing student_email');
       return res.status(400).json({ 
         success: false,
-        error: `Course "${course_track}" not found. Please check the course name.`
+        error: "Student email is required" 
       });
     }
-
-    const course = courseResult.data;
-    const courseSource = courseResult.source;
     
-    console.log('✅ Course found via', courseSource, ':', course.title, 'Price:', course.price);
-    
-    // Handle free courses
-    if (course.isFree) {
-      console.log('🎉 This is a free course');
-      // For free courses, skip payment processing and create enrollment directly
-      const payment = new Payment({
-        student_email: student_email,
-        course_track: course_track,
-        amount: 0,
-        screenshot_path: 'free-course',
-        status: 'verified',
-        is_free_course: true
+    if (!course_track) {
+      console.log('❌ Missing course_track');
+      return res.status(400).json({ 
+        success: false,
+        error: "Course track is required" 
       });
-
-      await payment.save();
-      console.log('✅ Free course payment record created');
-
-      // Create enrollment for free course
-      const enrollment = await createStudentEnrollment(payment);
+    }
+    
+    if (!req.file) {
+      console.log('❌ Missing screenshot file');
+      return res.status(400).json({ 
+        success: false,
+        error: "Payment screenshot is required" 
+      });
+    }
+    
+    // Clean the course title
+    const normalizedCourseTrack = String(course_track).trim();
+    console.log(`🔄 Normalized course: "${normalizedCourseTrack}"`);
+    
+    // Check if course exists with multiple methods
+    let foundCourse = null;
+    let foundKey = null;
+    
+    // Method 1: Exact match
+    if (courseData[normalizedCourseTrack]) {
+      foundCourse = courseData[normalizedCourseTrack];
+      foundKey = normalizedCourseTrack;
+      console.log(`✅ Exact match found: "${foundKey}"`);
+    } 
+    // Method 2: Case-insensitive match
+    else {
+      const courseKey = Object.keys(courseData).find(key => 
+        key.toLowerCase() === normalizedCourseTrack.toLowerCase()
+      );
       
-      return res.json({
-        success: true,
-        message: `Successfully enrolled in free course: ${course.title}`,
-        course: {
-          title: course.title,
-          description: course.description || "Course description",
-          price: 0,
-          duration: course.duration,
-          level: course.level,
-          category: course.category,
-          isFree: true
-        },
-        payment_id: payment._id,
-        enrollment_id: enrollment._id,
-        enrollment_date: new Date(),
-        status: 'enrolled_free'
-      });
+      if (courseKey) {
+        foundCourse = courseData[courseKey];
+        foundKey = courseKey;
+        console.log(`✅ Case-insensitive match found: "${foundKey}" (was looking for: "${normalizedCourseTrack}")`);
+      }
     }
-
-    const coursePrice = course.price;
     
-    // 2. Validate required fields
-    if (!student_email || !course_track || !req.file) {
+    if (!foundCourse) {
+      console.log(`❌ Course not found: "${normalizedCourseTrack}"`);
+      console.log('📋 Available courses:', Object.keys(courseData));
+      
       return res.status(400).json({ 
         success: false,
-        error: "All fields are required" 
+        error: `Course "${normalizedCourseTrack}" not found. Please check the course name.`,
+        availableCourses: Object.keys(courseData),
+        debug: {
+          received: normalizedCourseTrack,
+          available: Object.keys(courseData),
+          suggestion: "Check for typos or case differences"
+        }
       });
     }
-
-    console.log('✅ 4. All validations passed');
-
+    
+    console.log('✅ Course found:', foundCourse);
+    
     // 3. Create payment record
     const payment = new Payment({
       student_email: student_email,
-      course_track: course_track,
-      amount: coursePrice,
+      course_track: foundKey,  // Use the found key, not the original
+      amount: foundCourse.price,
       screenshot_path: req.file.path,
       status: 'verified',
-      course_source: courseSource,
-      course_id: course.courseId || null
+      course_source: 'hardcoded'
     });
 
-    console.log('🟡 5. Saving payment to database...');
+    console.log('🟡 Saving payment to database...');
     await payment.save();
-    console.log('✅ 6. Payment saved successfully:', payment._id);
+    console.log('✅ Payment saved:', payment._id);
 
-    // 4. ✅ AUTO-ENROLL STUDENT AFTER PAYMENT
-    console.log('🟡 7. Creating student enrollment...');
-    
+    // 4. Create enrollment
     try {
       const enrollment = await createStudentEnrollment(payment);
       
-      console.log('✅ 8. Student enrollment created successfully:', enrollment._id);
+      console.log('✅ Enrollment created:', enrollment._id);
       
-      // Send success response
+      // Success response
       return res.json({
         success: true,
-        message: `Payment successful! You are now enrolled in ${course.title}`,
+        message: `Payment successful! You are now enrolled in ${foundCourse.title}`,
         course: {
-          title: course.title,
-          description: course.description || "Course description",
-          price: course.price,
-          duration: course.duration,
-          level: course.level,
-          category: course.category,
-          isFree: course.isFree || false
+          title: foundCourse.title,
+          price: foundCourse.price,
+          duration: foundCourse.duration,
+          level: foundCourse.level,
+          category: foundCourse.category
         },
         payment_id: payment._id,
         enrollment_id: enrollment._id,
@@ -362,24 +374,19 @@ const processPayment = async (req, res) => {
       });
 
     } catch (enrollmentError) {
-      console.log('⚠️ Enrollment creation failed:', enrollmentError.message);
+      console.log('⚠️ Enrollment failed:', enrollmentError.message);
       
-      // Even if enrollment fails, payment was successful
+      // Payment succeeded even if enrollment failed
       return res.json({
         success: true,
         message: "Payment successful! Please contact admin for enrollment confirmation.",
         payment_id: payment._id,
-        course_info: {
-          title: course.title,
-          price: course.price
-        },
-        status: 'payment_successful_enrollment_pending'
+        warning: "Enrollment pending"
       });
     }
 
   } catch (error) {
-    console.error('❌ PAYMENT PROCESSING ERROR:', error.message);
-    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Payment processing error:', error);
     
     if (error.code === 11000) {
       return res.status(400).json({ 
@@ -403,26 +410,53 @@ const processPayment = async (req, res) => {
   }
 };
 
-// Get payment status (keep as is)
+// SIMPLIFIED: Get available courses
+const getAvailableCourses = async (req, res) => {
+  try {
+    console.log('🟡 Fetching hardcoded courses...');
+    
+    const hardcodedCourses = Object.values(courseData).map(course => ({
+      title: course.title,
+      price: course.price,
+      category: course.category,
+      duration: course.duration,
+      level: course.level,
+      source: 'hardcoded'
+    }));
+    
+    console.log(`✅ Found ${hardcodedCourses.length} hardcoded courses`);
+    
+    res.json({
+      success: true,
+      count: hardcodedCourses.length,
+      courses: hardcodedCourses,
+      message: 'Hardcoded courses only'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching courses:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error fetching courses'
+    });
+  }
+};
+
+// Keep other functions simple
 const getPaymentStatus = async (req, res) => {
   try {
     const { student_email } = req.params;
     
-    console.log('🟡 Checking payment status for:', student_email);
-
     const payments = await Payment.find({ student_email })
       .sort({ createdAt: -1 })
       .limit(1);
 
     if (payments.length === 0) {
-      console.log('❌ No payment record found');
       return res.status(404).json({
         success: false,
         error: "No payment record found"
       });
     }
-
-    console.log('✅ Payment status found:', payments[0].status);
     
     res.json({
       success: true,
@@ -430,7 +464,6 @@ const getPaymentStatus = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error getting payment status:', error);
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -438,7 +471,6 @@ const getPaymentStatus = async (req, res) => {
   }
 };
 
-// Verify payment (admin) - UPDATED
 const verifyPayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -456,131 +488,28 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // Create enrollment after verification
-    const enrollment = await createStudentEnrollment(payment);
-
     res.json({
       success: true,
-      message: 'Payment verified and student enrolled successfully',
-      payment,
-      enrollment
+      message: 'Payment verified successfully',
+      payment
     });
 
   } catch (error) {
-    console.error('❌ Verify payment error:', error);
     res.status(500).json({
       success: false,
-      error: 'Error verifying payment: ' + error.message
+      error: 'Error verifying payment'
     });
   }
 };
 
-// Get all available courses - UPDATED
-const getAvailableCourses = async (req, res) => {
-  try {
-    console.log('🟡 Fetching available courses...');
-    
-    // Get hardcoded courses
-    const hardcodedCourses = Object.values(courseData).map(course => ({
-      title: course.title,
-      price: course.price,
-      category: course.category,
-      duration: course.duration,
-      level: course.level,
-      source: 'hardcoded',
-      type: 'original'
-    }));
-    
-    // Get database courses (published and active)
-    const dbCourses = await Course.find({
-      status: 'published',
-      isActive: true
-    }).select('title price category duration level description isFree studentsEnrolled');
-    
-    const transformedDbCourses = dbCourses.map(course => ({
-      title: course.title,
-      price: course.isFree ? 0 : course.price,
-      category: course.category,
-      duration: course.duration,
-      level: course.level,
-      description: course.description,
-      isFree: course.isFree,
-      enrolledStudents: course.studentsEnrolled || 0,
-      source: 'database',
-      type: 'new',
-      courseId: course._id
-    }));
-    
-    // Combine both lists
-    const allCourses = [...hardcodedCourses, ...transformedDbCourses];
-    
-    console.log(`✅ Found ${allCourses.length} total courses (${hardcodedCourses.length} hardcoded + ${transformedDbCourses.length} from database)`);
-    
-    res.json({
-      success: true,
-      count: allCourses.length,
-      hardcoded: hardcodedCourses.length,
-      database: transformedDbCourses.length,
-      courses: allCourses
-    });
-    
-  } catch (error) {
-    console.error('❌ Error fetching available courses:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error fetching courses: ' + error.message
-    });
-  }
-};
-
-// New function: Get course details for enrollment
-const getCourseDetails = async (req, res) => {
-  try {
-    const { courseTitle } = req.params;
-    
-    console.log('🔍 Getting details for course:', courseTitle);
-    
-    const courseResult = await getCourse(courseTitle);
-    
-    if (!courseResult) {
-      return res.status(404).json({
-        success: false,
-        error: 'Course not found'
-      });
-    }
-    
-    const course = courseResult.data;
-    
-    res.json({
-      success: true,
-      course: {
-        title: course.title,
-        price: course.price,
-        category: course.category,
-        duration: course.duration,
-        level: course.level,
-        description: course.description,
-        isFree: course.isFree || false,
-        source: courseResult.source,
-        courseId: course.courseId || null
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Error getting course details:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error fetching course details: ' + error.message
-    });
-  }
-};
+// REMOVE database-related functions
+// Remove: getCourseDetails, database searching, Course model imports
 
 module.exports = {
   processPayment,
   getPaymentStatus,
   upload,
-  createStudentEnrollment,
   verifyPayment,
   getAvailableCourses,
-  getCourseDetails // Add this new function
+  createStudentEnrollment
 };

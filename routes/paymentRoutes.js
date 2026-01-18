@@ -1,3 +1,4 @@
+// paymentRoute.js - SIMPLIFIED
 const express = require('express');
 const router = express.Router();
 const { 
@@ -5,11 +6,10 @@ const {
   getPaymentStatus, 
   upload,
   verifyPayment,
-  getAvailableCourses,
-  getCourseDetails
+  getAvailableCourses
 } = require('../controllers/paymentController');
 
-// Process payment with screenshot upload (auto-enrolls student)
+// Process payment with screenshot upload
 router.post('/process', upload.single('screenshot'), processPayment);
 
 // Manual payment verification (admin use)
@@ -18,9 +18,9 @@ router.put('/verify/:paymentId', verifyPayment);
 // Get payment status
 router.get('/status/:student_email', getPaymentStatus);
 
+// Get available courses (hardcoded only)
 router.get('/available-courses', getAvailableCourses);
 
-router.get('/course-details/:courseTitle', getCourseDetails);
-
+// REMOVE: router.get('/course-details/:courseTitle', getCourseDetails);
 
 module.exports = router;

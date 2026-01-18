@@ -19,20 +19,20 @@ const studentEnrollmentSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'web-development','mobile-dev','design', 'business', 
+      'web-development', 'mobile-dev', 'design', 'business',
       'marketing', 'productivity', 'other'
     ],
     default: 'other'
   },
-   course_id: {
+  course_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course'
   },
-  
+
   course_title: {
     type: String
   },
-  
+
   course_type: {
     type: String,
     enum: ['hardcoded', 'database'],
@@ -102,11 +102,11 @@ const studentEnrollmentSchema = new mongoose.Schema({
 });
 
 // Update overall progress
-studentEnrollmentSchema.methods.updateProgress = function() {
-  const totalMaterials = this.progress.completed_videos.length + 
-                        this.progress.completed_documents.length + 
-                        this.progress.completed_meetings.length;
-  
+studentEnrollmentSchema.methods.updateProgress = function () {
+  const totalMaterials = this.progress.completed_videos.length +
+    this.progress.completed_documents.length +
+    this.progress.completed_meetings.length;
+
   this.progress.overall_progress = Math.min(totalMaterials * 10, 100);
   this.progress.last_accessed = new Date();
 };
