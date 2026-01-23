@@ -22,10 +22,18 @@ const teacherSchema = new mongoose.Schema({
     values: [
       'Web Development',
       'Microsoft Office', 
-      'Mobile App Development',
-      'UI/UX Design',
+      'C programming',
+      'java',
+      'php',
+      'DBMS',
       'Digital Marketing',
-      'Graphic Design'
+      'Tally',
+      'Microsoft Word',
+      'Microsoft Excel',
+      'Microsoft PowerPoint',
+      'Python',
+      'Email & Internet',
+      'Canva'
     ],
     message: 'Please select a valid course from the options'
   }

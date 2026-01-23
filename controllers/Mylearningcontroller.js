@@ -55,12 +55,19 @@ const formatCloudinaryUrlForStudent = (url, fileType) => {
 const getCategoryDisplayName = (category) => {
   const categoryMap = {
     'web-development': 'Web Development',
-    'mobile-dev': 'Mobile Development',
-    'digital-marketing': 'Digital Marketing',
     'microsoft-office': 'Microsoft Office',
-    'design': 'Design',
-    'business': 'Business',
-    'other': 'Other'
+    'c-programming': 'C programming',
+    'java': 'java',
+    'php':'php',
+    'dbms':'DBMS',
+    'digital-marketing': 'Digital Marketing',
+    'tally':'Tally',
+    'microsoft-word':'Microsoft Word',
+    'microsoft-excel':'Microsoft Excel',
+    'microsoft-powerPoint': 'Microsoft PowerPoint',
+    'python': 'Python',
+    'email-internet': 'Email & Internet',
+    'canva': 'Canva',
   };
   return categoryMap[category] || category;
 };

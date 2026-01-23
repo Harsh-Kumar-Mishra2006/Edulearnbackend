@@ -19,8 +19,20 @@ const studentEnrollmentSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'web-development', 'mobile-dev', 'design', 'business',
-      'marketing', 'productivity', 'other'
+      'Web Development',
+      'Microsoft Office', 
+      'C programming',
+      'java',
+      'php',
+      'DBMS',
+      'Digital Marketing',
+      'Tally',
+      'Microsoft Word',
+      'Microsoft Excel',
+      'Microsoft PowerPoint',
+      'Python',
+      'Email & Internet',
+      'Canva'
     ],
     default: 'other'
   },

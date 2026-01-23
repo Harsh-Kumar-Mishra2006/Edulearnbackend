@@ -25,13 +25,20 @@ const courseMaterialSchema = new mongoose.Schema({
   type: String,
   required: [true, 'Course category is required'],
   enum: [
-    'web-development', 
-    'mobile-dev', 
-    'digital-marketing', 
-    'microsoft-office', 
-    'design', 
-    'business', 
-    'other'
+      'Web Development',
+      'Microsoft Office', 
+      'C programming',
+      'java',
+      'php',
+      'DBMS',
+      'Digital Marketing',
+      'Tally',
+      'Microsoft Word',
+      'Microsoft Excel',
+      'Microsoft PowerPoint',
+      'Python',
+      'Email & Internet',
+      'Canva'
   ],
   default: 'other'
 },
