@@ -22,8 +22,8 @@ const courseData = {
     price: 139,
     category: "Productivity",
   },
-  'C programming': {
-    title: "C programming",
+  'C Programming': {
+    title: "C Programming",
     duration: "10 weeks",
     level: "Intermediate",
     price: 199,

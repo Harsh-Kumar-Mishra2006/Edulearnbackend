@@ -104,7 +104,7 @@ const courseMaterialSchema = new mongoose.Schema({
     enum: [
       'Web Development',
       'Microsoft Office', 
-      'C programming',
+      'C Programming',
       'java',
       'php',
       'DBMS',

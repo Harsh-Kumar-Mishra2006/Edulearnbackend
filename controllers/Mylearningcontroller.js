@@ -56,7 +56,7 @@ const getCategoryDisplayName = (category) => {
   const categoryMap = {
     'web-development': 'Web Development',
     'microsoft-office': 'Microsoft Office',
-    'c-programming': 'C programming',
+    'c-programming': 'C Programming',
     'java': 'java',
     'php':'php',
     'dbms':'DBMS',

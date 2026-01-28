@@ -22,7 +22,7 @@ const teacherSchema = new mongoose.Schema({
     values: [
       'Web Development',
       'Microsoft Office', 
-      'C programming',
+      'C Programming',
       'java',
       'php',
       'DBMS',
