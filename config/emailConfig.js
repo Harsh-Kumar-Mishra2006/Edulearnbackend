@@ -1,59 +1,50 @@
-// config/emailConfig.js - UNIVERSAL VERSION
+// config/emailConfig.js - SIMPLIFIED UNIVERSAL VERSION
 const nodemailer = require('nodemailer');
 
-// Detect environment
-const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
-
 const getTransporterConfig = () => {
-  if (isProduction && process.env.EMAIL_SERVICE === 'sendgrid') {
-    // SendGrid configuration for Render
+  const emailHost = process.env.EMAIL_HOST || '';
+  
+  // If using SendGrid (Render production)
+  if (emailHost.includes('sendgrid.net')) {
+    console.log('📧 Using SendGrid configuration');
     return {
       host: 'smtp.sendgrid.net',
       port: 587,
       secure: false,
       auth: {
         user: 'apikey',
-        pass: process.env.EMAIL_PASS, // SendGrid API Key
-      }
-    };
-  } else {
-    // Gmail configuration for local development
-    return {
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.EMAIL_PORT) || 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // Gmail App Password
+        pass: process.env.EMAIL_PASS,
       },
-      tls: {
-        rejectUnauthorized: false
-      }
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
     };
   }
+  
+  // Default to Gmail (local development)
+  console.log('📧 Using Gmail configuration');
+  return {
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT) || 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
 };
 
-// Create transporter
 const transporter = nodemailer.createTransport(getTransporterConfig());
 
-// Verify connection (with better error handling)
-const verifyEmailConnection = async () => {
-  try {
-    await transporter.verify();
-    console.log(`✅ Email server ready (${isProduction ? 'SendGrid' : 'Gmail'})`);
-    return true;
-  } catch (error) {
-    if (isProduction) {
-      console.warn(`⚠️ SendGrid connection failed on startup: ${error.message}`);
-      console.log('📧 Emails may fail in production. Check SendGrid configuration.');
-    } else {
-      console.error(`❌ Gmail connection failed: ${error.message}`);
-    }
-    return false;
+// Simple verification
+transporter.verify((error) => {
+  if (error) {
+    console.warn('⚠️ Email verification failed on startup:', error.message);
+  } else {
+    console.log('✅ Email transporter ready');
   }
-};
-
-// Call verification on startup
-verifyEmailConnection();
+});
 
 module.exports = transporter;
