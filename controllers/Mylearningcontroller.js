@@ -64,7 +64,7 @@ const getCategoryDisplayName = (category) => {
     'tally':'Tally',
     'microsoft-word':'Microsoft Word',
     'microsoft-excel':'Microsoft Excel',
-    'microsoft-powerPoint': 'Microsoft PowerPoint',
+    'microsoft-powerpoint': 'Microsoft PowerPoint',
     'python': 'Python',
     'email-internet': 'Email & Internet',
     'canva': 'Canva',

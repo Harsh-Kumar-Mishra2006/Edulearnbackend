@@ -136,6 +136,7 @@ const getCourse = (courseTitle) => {
 };
 
 // SIMPLIFIED: Create enrollment for hardcoded courses only
+// SIMPLIFIED: Create enrollment for hardcoded courses only
 const createStudentEnrollment = async (payment) => {
   try {
     console.log('🟡 Creating enrollment for payment:', payment._id);
@@ -149,25 +150,11 @@ const createStudentEnrollment = async (payment) => {
     
     const course = courseResult.data;
     
-    // Course category mapping for hardcoded courses
-    const courseTrackMap = {
-      'Web Development': 'development',
-      'C programming': 'development',
-      'java': 'development',
-      'php': 'development',
-      'DBMS': 'development',
-      'Python': 'development',
-      'Digital Marketing': 'marketing',
-      'Microsoft Office': 'productivity',
-      'Tally': 'productivity',
-      'Microsoft Word': 'productivity',
-      'Microsoft Excel': 'productivity',
-      'Microsoft PowerPoint': 'productivity',
-      'Email & Internet': 'productivity',
-      'Canva': 'design'
-    };
+    // IMPORTANT: Use the EXACT course title from course data, not from payment
+    // Payment.course_track might have case issues, use the standardized version
+    const courseCategory = course.title; // Use "Tally" from course data, not payment.course_track
 
-    const courseCategory = courseTrackMap[payment.course_track] || 'other';
+    console.log('🟡 Course category for enrollment:', courseCategory);
 
     // Get student name from personal info
     const personalInfo = await PersonalInfo.findOne({ email: payment.student_email });
@@ -176,7 +163,7 @@ const createStudentEnrollment = async (payment) => {
     // Check if enrollment already exists
     const existingEnrollment = await StudentEnrollment.findOne({
       student_email: payment.student_email,
-      course_category: courseCategory,
+      course_category: courseCategory, // Use exact course title
       payment_status: 'verified'
     });
 
@@ -185,11 +172,11 @@ const createStudentEnrollment = async (payment) => {
       return existingEnrollment;
     }
 
-    // Create enrollment data
+    // Create enrollment data - use exact course title
     const enrollmentData = {
       student_email: payment.student_email,
       student_name: studentName,
-      course_category: courseCategory,
+      course_category: courseCategory, // "Tally", "Web Development", etc.
       payment_status: 'verified',
       payment_id: payment._id,
       enrollment_status: 'active',
@@ -201,6 +188,8 @@ const createStudentEnrollment = async (payment) => {
       course_title: course.title
     };
 
+    console.log('🟡 Enrollment data:', enrollmentData);
+
     // Create enrollment
     const enrollment = new StudentEnrollment(enrollmentData);
     await enrollment.save();
@@ -210,6 +199,13 @@ const createStudentEnrollment = async (payment) => {
     
   } catch (error) {
     console.error('❌ Error creating student enrollment:', error);
+    
+    // Log specific validation errors
+    if (error.name === 'ValidationError') {
+      console.error('❌ Validation errors:', Object.keys(error.errors));
+      console.error('❌ Full validation error:', error);
+    }
+    
     throw error;
   }
 };
@@ -253,6 +249,11 @@ const processPayment = async (req, res) => {
     console.log('  - student_email:', student_email);
     console.log('  - course_track:', course_track);
     console.log('  - amount:', amount);
+    // In processPayment function, after finding the course
+console.log('✅ Course found:', foundCourse);
+console.log('✅ Course title from data:', foundCourse.title);
+console.log('✅ Course category from data:', foundCourse.category); // This might be "productivity"
+console.log('✅ Using as enrollment category:', foundKey); // This should be "Tally"
     
     // Debug: Show exact course_track
     console.log('🔍 DETAILED COURSE CHECK:');
