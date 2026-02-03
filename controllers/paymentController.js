@@ -249,17 +249,11 @@ const processPayment = async (req, res) => {
     console.log('  - student_email:', student_email);
     console.log('  - course_track:', course_track);
     console.log('  - amount:', amount);
-    // In processPayment function, after finding the course
-console.log('✅ Course found:', foundCourse);
-console.log('✅ Course title from data:', foundCourse.title);
-console.log('✅ Course category from data:', foundCourse.category); // This might be "productivity"
-console.log('✅ Using as enrollment category:', foundKey); // This should be "Tally"
     
     // Debug: Show exact course_track
     console.log('🔍 DETAILED COURSE CHECK:');
     console.log('  - Raw course_track:', `"${course_track}"`);
     console.log('  - Length:', course_track.length);
-    console.log('  - Character codes:', [...course_track].map(c => c.charCodeAt(0)));
     
     // Show all available courses
     console.log('📋 AVAILABLE COURSES IN courseData:');
@@ -319,6 +313,7 @@ console.log('✅ Using as enrollment category:', foundKey); // This should be "T
       }
     }
     
+    // Check if course was found
     if (!foundCourse) {
       console.log(`❌ Course not found: "${normalizedCourseTrack}"`);
       console.log('📋 Available courses:', Object.keys(courseData));
@@ -334,13 +329,17 @@ console.log('✅ Using as enrollment category:', foundKey); // This should be "T
         }
       });
     }
-    
+
+    // ✅ NOW it's safe to log - foundCourse is guaranteed to be defined here
     console.log('✅ Course found:', foundCourse);
-    
+    console.log('✅ Course title from data:', foundCourse.title);
+    console.log('✅ Course category from data:', foundCourse.category);
+    console.log('✅ Using as enrollment category:', foundKey);
+
     // 3. Create payment record
     const payment = new Payment({
       student_email: student_email,
-      course_track: foundKey,  // Use the found key, not the original
+      course_track: foundKey,
       amount: foundCourse.price,
       screenshot_path: req.file.path,
       status: 'verified',
