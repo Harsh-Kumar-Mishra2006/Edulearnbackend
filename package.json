@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node App.js",
     "dev": "nodemon App.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:cloudinary": "node testCloudinary.js",
+  "test:api": "TEST_TEACHER_TOKEN=your_jwt_token_here node testAPI.js",
+  "test:all": "npm run test:cloudinary && npm run test:api"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +24,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "express-validator": "^7.3.1",
+    "form-data": "^4.0.5",
     "handlebars": "^4.7.8",
     "helmet": "^8.1.0",
     "jest": "^30.2.0",
@@ -30,6 +34,7 @@
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.12",
     "nodemailer-express-handlebars": "^4.0.0",
     "nodemon": "^3.1.10",

@@ -25,6 +25,10 @@ const videoStorage = new CloudinaryStorage({
       format: async (req, file) => path.parse(file.originalname).ext.substring(1) || 'mp4',
       public_id: `${safeName}_${timestamp}`,
       chunk_size: 6000000, // 6MB chunks for better upload
+      use_filename: true,
+      unique_filename: false,
+      overwrite: false,
+      return_delete_token: true,
       eager: [
         { format: 'mp4', quality: 'auto' }
       ]

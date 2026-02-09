@@ -1,6 +1,7 @@
 // controllers/courseMaterialController.js
 const CourseMaterial = require('../models/courseMaterialdata');
 const Teacher = require('../models/adminadddata');
+const { getVideoThumbnail } = require('../config/cloudinaryStorage');
 const path = require('path');
 const { 
   uploadVideo, 
@@ -99,19 +100,19 @@ const uploadVideoToCourse = async (req, res) => {
 
     // Prepare video data
     const videoData = {
-      title: title || `Video ${course.materials.videos.length + 1}`,
-      description: description || '',
-      video_url: req.file.path, // Cloudinary URL
-      thumbnail_url: getVideoThumbnail(req.file.filename), // Add thumbnail
-      public_id: req.file.filename, // Cloudinary public ID
-      duration: duration || '00:00',
-      file_size: req.file.size,
-      mimetype: req.file.mimetype,
-      original_name: req.file.originalname,
-      is_public: is_public,
-      video_order: parseInt(video_order),
-      upload_date: new Date()
-    };
+  title: title || `Video ${course.materials.videos.length + 1}`,
+  description: description || '',
+  video_url: req.file.secure_url || req.file.url, // CORRECT: Use Cloudinary URL
+  public_id: req.file.public_id, // CORRECT: Use actual public_id
+  thumbnail_url: getVideoThumbnail(req.file.public_id), // Use public_id
+  duration: duration || '00:00',
+  file_size: req.file.size,
+  mimetype: req.file.mimetype,
+  original_name: req.file.originalname,
+  is_public: is_public,
+  video_order: parseInt(video_order),
+  upload_date: new Date()
+};
 
     console.log('✅ Video data prepared:', videoData);
 
@@ -182,20 +183,30 @@ const uploadDocumentToCourse = async (req, res) => {
     const fileExtension = path.extname(req.file.originalname).substring(1).toLowerCase();
     
     const documentData = {
-      title: title || `Document ${course.materials.documents.length + 1}`,
-      description: description || '',
-      file_url: req.file.path, // Cloudinary URL
-      public_id: req.file.filename, // Cloudinary public ID
-      file_type: fileExtension,
-      file_size: req.file.size,
-      mimetype: req.file.mimetype,
-      original_name: req.file.originalname,
-      is_public: is_public,
-      document_type: document_type,
-      upload_date: new Date()
-    };
+  title: title || `Document ${course.materials.documents.length + 1}`,
+  description: description || '',
+  file_url: req.file.secure_url || req.file.url, // CORRECT: Use Cloudinary URL
+  public_id: req.file.public_id, // CORRECT: Use actual public_id
+  file_type: fileExtension,
+  file_size: req.file.size,
+  mimetype: req.file.mimetype,
+  original_name: req.file.originalname,
+  is_public: is_public,
+  document_type: document_type,
+  upload_date: new Date()
+};
 
     console.log('✅ Document data prepared:', documentData);
+    console.log('📊 Cloudinary response:', {
+  filename: req.file.filename,
+  path: req.file.path,
+  url: req.file.url,
+  secure_url: req.file.secure_url,
+  public_id: req.file.public_id,
+  originalname: req.file.originalname,
+  mimetype: req.file.mimetype,
+  size: req.file.size
+});
 
     // Add document to course
     course.materials.documents.push(documentData);

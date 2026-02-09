@@ -4,53 +4,45 @@ const CourseMaterial = require('../models/courseMaterialdata');
 // Helper function to get display names for categories
 
 // Add this helper function at the top of Mylearningcontroller.js
-const formatCloudinaryUrlForStudent = (url, fileType) => {
-  if (!url) return null;
+const formatCloudinaryUrlForStudent = (url, fileType, publicId) => {
+  console.log('🔗 Formatting URL:', { url, fileType, publicId });
   
-  console.log('Formatting URL:', url, 'Type:', fileType);
-  
-  // If it's already a proper Cloudinary URL, return as-is
-  if (url.includes('res.cloudinary.com')) {
-    // Check if it's in the right format for viewing
-    const cloudName = 'dpsssv5tg'; // Your Cloudinary cloud name
-    
-    // For PDFs: ensure they're viewable
-    if (fileType === 'pdf' && url.includes('/upload/')) {
-      return url.replace('/upload/', '/upload/fl_attachment.name:document/');
-    }
-    
+  // If we have a proper Cloudinary URL, return it
+  if (url && url.includes('res.cloudinary.com')) {
+    console.log('✅ Already proper Cloudinary URL');
     return url;
   }
   
-  // If it's a Cloudinary public_id format
-  if (url.includes('cloudinary.com')) {
-    try {
-      const parts = url.split('/');
-      const publicId = parts[parts.length - 1];
-      const resourceType = fileType === 'pdf' ? 'image' : 
-                          ['jpg', 'jpeg', 'png', 'gif'].includes(fileType) ? 'image' : 'raw';
-      
-      return `https://res.cloudinary.com/dpsssv5tg/${resourceType}/upload/${publicId}`;
-    } catch (error) {
-      console.error('Error formatting Cloudinary URL:', error);
-      return url;
+  // If we have a public_id but no URL, construct one
+  if (publicId && !url) {
+    console.log('🔧 Constructing URL from public_id:', publicId);
+    const cloudName = 'dpsssv5tg';
+    
+    // Determine resource type
+    let resourceType = 'raw';
+    if (fileType === 'pdf') {
+      resourceType = 'image';
+    } else if (['mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv'].includes(fileType)) {
+      resourceType = 'video';
+    } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
+      resourceType = 'image';
     }
+    
+    // Construct URL
+    const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/${resourceType}/upload/${publicId}`;
+    console.log('📤 Constructed URL:', cloudinaryUrl);
+    return cloudinaryUrl;
   }
   
-  // For old upload URLs, return null (students can't access these)
-  if (url.startsWith('/uploads/')) {
-    console.warn('Old upload URL found:', url);
-    return null;
+  // If we have a URL but it's weird, try to fix it
+  if (url && url.includes('cloudinary.com') && !url.includes('res.cloudinary.com')) {
+    console.log('🔄 Fixing Cloudinary URL');
+    return url.replace('cloudinary.com', 'res.cloudinary.com');
   }
   
-  // For relative URLs, make absolute
-  if (url.startsWith('/')) {
-    return `https://edulearnbackend-ffiv.onrender.com${url}`;
-  }
-  
-  return url;
+  console.log('❌ No usable URL or public_id');
+  return null;
 };
-
 
 const getCategoryDisplayName = (category) => {
   const categoryMap = {
@@ -150,6 +142,7 @@ const getMyLearningCourses = async (req, res) => {
               title: video.title,
               description: video.description,
               video_url: formatCloudinaryUrlForStudent(video.video_url, 'mp4'),
+              public_id: video.public_id, // ADD THIS
             isAvailable: !!formatCloudinaryUrlForStudent(video.video_url, 'mp4'),
               duration: video.duration,
               file_size: video.file_size,
@@ -168,6 +161,7 @@ const getMyLearningCourses = async (req, res) => {
               title: doc.title,
               description: doc.description,
               file_url: formatCloudinaryUrlForStudent(doc.file_url, doc.file_type),
+              public_id: doc.public_id, // ADD THIS
             isAvailable: !!formatCloudinaryUrlForStudent(doc.file_url, doc.file_type),
               file_type: doc.file_type,
               file_size: doc.file_size,
@@ -443,8 +437,6 @@ const debugStudentData = async (req, res) => {
     });
   }
 };
-
-
 
 module.exports = {
   getMyLearningCourses,
