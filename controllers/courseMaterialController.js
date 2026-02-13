@@ -65,22 +65,28 @@ const createCourse = async (req, res) => {
 
 // controllers/courseMaterialController.js - FIXED UPLOAD FUNCTIONS
 
-// Upload video to course - IMPROVED
+// Upload video to course - COMPLETELY FIXED VERSION
 const uploadVideoToCourse = async (req, res) => {
   try {
-    console.log('📤 Starting video upload...');
-    console.log('Request params:', req.params);
-    console.log('Request body:', req.body);
-    console.log('Request file:', req.file);
-
+    console.log('📤 Saving video metadata...');
+    console.log('📦 Full request body:', JSON.stringify(req.body, null, 2));
+    
     const { course_id } = req.params;
-    const { title, description, duration, is_public = true, video_order = 0 } = req.body;
+    const { title, description, cloudinary_url, cloudinary_public_id, file_size, mimetype, original_name, is_public } = req.body;
 
-    if (!req.file) {
-      console.error('❌ No file in request');
+    // Check each required field
+    const missingFields = [];
+    if (!cloudinary_url) missingFields.push('cloudinary_url');
+    if (!cloudinary_public_id) missingFields.push('cloudinary_public_id');
+    if (!file_size) missingFields.push('file_size');
+    if (!mimetype) missingFields.push('mimetype');
+    if (!original_name) missingFields.push('original_name');
+
+    if (missingFields.length > 0) {
+      console.error('❌ Missing required fields:', missingFields);
       return res.status(400).json({
         success: false,
-        error: "Video file is required"
+        error: `Missing required fields: ${missingFields.join(', ')}`
       });
     }
 
@@ -91,28 +97,46 @@ const uploadVideoToCourse = async (req, res) => {
     });
 
     if (!course) {
-      console.error('❌ Course not found:', course_id);
       return res.status(404).json({
         success: false,
         error: "Course not found or access denied"
       });
     }
 
-    // Prepare video data
+    // Generate thumbnail safely
+    let thumbnail_url = null;
+    try {
+      // Check if getVideoThumbnail function exists
+      if (typeof getVideoThumbnail === 'function') {
+        thumbnail_url = getVideoThumbnail(cloudinary_public_id);
+        console.log('🖼️ Generated thumbnail:', thumbnail_url);
+      } else {
+        console.log('⚠️ getVideoThumbnail function not available');
+      }
+    } catch (thumbError) {
+      console.error('❌ Thumbnail generation error:', thumbError.message);
+      // Continue without thumbnail
+    }
+
+    // Prepare video data - WITHOUT thumbnail if it failed
     const videoData = {
-  title: title || `Video ${course.materials.videos.length + 1}`,
-  description: description || '',
-  video_url: req.file.secure_url || req.file.url, // CORRECT: Use Cloudinary URL
-  public_id: req.file.public_id, // CORRECT: Use actual public_id
-  thumbnail_url: getVideoThumbnail(req.file.public_id), // Use public_id
-  duration: duration || '00:00',
-  file_size: req.file.size,
-  mimetype: req.file.mimetype,
-  original_name: req.file.originalname,
-  is_public: is_public,
-  video_order: parseInt(video_order),
-  upload_date: new Date()
-};
+      title: title || `Video ${course.materials.videos.length + 1}`,
+      description: description || '',
+      video_url: cloudinary_url,
+      public_id: cloudinary_public_id,
+      duration: req.body.duration || '00:00',
+      file_size: parseInt(file_size), // Ensure it's a number
+      mimetype: mimetype,
+      original_name: original_name,
+      is_public: is_public === true || is_public === 'true',
+      video_order: course.materials.videos.length,
+      upload_date: new Date()
+    };
+
+    // Only add thumbnail_url if it was generated successfully
+    if (thumbnail_url) {
+      videoData.thumbnail_url = thumbnail_url;
+    }
 
     console.log('✅ Video data prepared:', videoData);
 
@@ -120,11 +144,9 @@ const uploadVideoToCourse = async (req, res) => {
     course.materials.videos.push(videoData);
     await course.save();
 
-    console.log('✅ Video saved to database');
-
     res.json({
       success: true,
-      message: "Video uploaded successfully",
+      message: "Video saved successfully",
       data: {
         video: videoData,
         course: {
@@ -136,31 +158,29 @@ const uploadVideoToCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('🚨 Upload video error:', error);
+    console.error('🚨 Save video error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: "Error uploading video: " + error.message
+      error: "Error saving video: " + error.message
     });
   }
 };
 
-// Upload document to course - IMPROVED
+// Upload document to course - FIXED VERSION
 const uploadDocumentToCourse = async (req, res) => {
   try {
-    console.log('📤 Starting document upload...');
-    console.log('Request params:', req.params);
-    console.log('Request body:', req.body);
-    console.log('Request file:', req.file);
-
+    console.log('📤 Saving document metadata...');
+    console.log('📦 Document request body:', JSON.stringify(req.body, null, 2));
+    
     const { course_id } = req.params;
-    const { title, description, is_public = true, document_type = 'notes' } = req.body;
+    const { title, description, cloudinary_url, cloudinary_public_id, file_size, mimetype, original_name, is_public = true, document_type = 'notes', file_extension } = req.body;
 
-    if (!req.file) {
-      console.error('❌ No file in request');
+    // Check required fields
+    if (!cloudinary_url || !cloudinary_public_id) {
       return res.status(400).json({
         success: false,
-        error: "Document file is required"
+        error: "Cloudinary URL and public_id are required"
       });
     }
 
@@ -171,52 +191,35 @@ const uploadDocumentToCourse = async (req, res) => {
     });
 
     if (!course) {
-      console.error('❌ Course not found:', course_id);
       return res.status(404).json({
         success: false,
         error: "Course not found or access denied"
       });
     }
 
-    // Get file extension
-    const path = require('path');
-    const fileExtension = path.extname(req.file.originalname).substring(1).toLowerCase();
-    
     const documentData = {
-  title: title || `Document ${course.materials.documents.length + 1}`,
-  description: description || '',
-  file_url: req.file.secure_url || req.file.url, // CORRECT: Use Cloudinary URL
-  public_id: req.file.public_id, // CORRECT: Use actual public_id
-  file_type: fileExtension,
-  file_size: req.file.size,
-  mimetype: req.file.mimetype,
-  original_name: req.file.originalname,
-  is_public: is_public,
-  document_type: document_type,
-  upload_date: new Date()
-};
+      title: title || `Document ${course.materials.documents.length + 1}`,
+      description: description || '',
+      file_url: cloudinary_url,
+      public_id: cloudinary_public_id,
+      file_type: file_extension || (original_name ? original_name.split('.').pop().toLowerCase() : 'unknown'),
+      file_size: parseInt(file_size), // Ensure it's a number
+      mimetype: mimetype,
+      original_name: original_name,
+      is_public: is_public === true || is_public === 'true',
+      document_type: document_type,
+      upload_date: new Date()
+    };
 
     console.log('✅ Document data prepared:', documentData);
-    console.log('📊 Cloudinary response:', {
-  filename: req.file.filename,
-  path: req.file.path,
-  url: req.file.url,
-  secure_url: req.file.secure_url,
-  public_id: req.file.public_id,
-  originalname: req.file.originalname,
-  mimetype: req.file.mimetype,
-  size: req.file.size
-});
 
     // Add document to course
     course.materials.documents.push(documentData);
     await course.save();
 
-    console.log('✅ Document saved to database');
-
     res.json({
       success: true,
-      message: "Document uploaded successfully",
+      message: "Document saved successfully",
       data: {
         document: documentData,
         course: {
@@ -228,15 +231,13 @@ const uploadDocumentToCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('🚨 Upload document error:', error);
-    console.error('Error stack:', error.stack);
+    console.error('❌ Save document error:', error);
     res.status(500).json({
       success: false,
-      error: "Error uploading document: " + error.message
+      error: "Error saving document: " + error.message
     });
   }
 };
-
 // Get teacher's courses
 const getTeacherCourses = async (req, res) => {
   try {
