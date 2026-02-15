@@ -1,4 +1,4 @@
-// routes/Mylearingroutes.js - UPDATED VERSION
+// routes/Mylearingroutes.js - COMPLETELY FIXED VERSION
 const express = require('express');
 const router = express.Router();
 const {
@@ -26,10 +26,13 @@ router.get('/courses', getMyLearningCourses);
 // Get materials for specific course category
 router.get('/courses/:category', getCategoryMaterials);
 
-// Download endpoints
+// Download endpoints - FIXED: Match frontend expectations
 router.get('/download/video/:course_id/:video_id', downloadVideo);
 router.get('/download/document/:course_id/:document_id', downloadDocument);
-router.get('/view/:public_id', viewFile);
+
+// View endpoints - FIXED: Support both formats
+router.get('/view/:course_id/:file_id/:file_type', viewFile); // For frontend with course context
+router.get('/view/public/:public_id', viewFile); // Keep original for public_id view
 
 // Mark material as completed
 router.post('/progress/:category/:material_type/:material_id', markMaterialCompleted);

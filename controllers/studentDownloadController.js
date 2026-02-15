@@ -1,7 +1,6 @@
-// controllers/studentDownloadController.js - NEW FILE
+// controllers/studentDownloadController.js - FIXED FOR ROUTES
 const CourseMaterial = require('../models/courseMaterialdata');
 const StudentEnrollment = require('../models/Mylearningmodel');
-const cloudinary = require('../config/cloudinaryConfig');
 
 // Download video
 const downloadVideo = async (req, res) => {
@@ -9,29 +8,39 @@ const downloadVideo = async (req, res) => {
     const { course_id, video_id } = req.params;
     const student_email = req.user.email;
 
+    console.log('📥 Download video request:', { course_id, video_id, student_email });
+
+    // Find the course
+    const course = await CourseMaterial.findById(course_id);
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
     // Check enrollment
     const enrollment = await StudentEnrollment.findOne({
       student_email,
+      course_category: course.course_category,
       payment_status: 'verified',
       enrollment_status: 'active'
     });
 
     if (!enrollment) {
-      return res.status(403).json({ success: false, error: 'Not enrolled' });
+      console.log('❌ No enrollment found for:', { student_email, category: course.course_category });
+      return res.status(403).json({ success: false, error: 'You are not enrolled in this course' });
     }
 
-    // Get course and video
-    const course = await CourseMaterial.findById(course_id);
-    if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
-
+    // Find the video
     const video = course.materials.videos.id(video_id);
-    if (!video) return res.status(404).json({ success: false, error: 'Video not found' });
-
-    if (!video.is_public) {
-      return res.status(403).json({ success: false, error: 'Video not available' });
+    if (!video) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
     }
 
-    // Get Cloudinary URL
+    // Check if video is public
+    if (!video.is_public) {
+      return res.status(403).json({ success: false, error: 'This video is not available for download' });
+    }
+
+    // Get video URL
     let downloadUrl = video.video_url;
     
     // If no URL but has public_id, construct it
@@ -43,12 +52,21 @@ const downloadVideo = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Video URL not found' });
     }
 
-    // Redirect to Cloudinary for download
-    res.redirect(downloadUrl);
+    console.log('✅ Video download authorized, redirecting to:', downloadUrl);
+
+    // For Cloudinary videos, add download flag
+    if (downloadUrl.includes('cloudinary.com')) {
+      const filename = encodeURIComponent(video.title || 'video');
+      if (downloadUrl.includes('/upload/')) {
+        downloadUrl = downloadUrl.replace('/upload/', `/upload/fl_attachment:${filename}/`);
+      }
+    }
+
+    return res.redirect(downloadUrl);
 
   } catch (error) {
-    console.error('Download video error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Download video error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 
@@ -58,29 +76,39 @@ const downloadDocument = async (req, res) => {
     const { course_id, document_id } = req.params;
     const student_email = req.user.email;
 
+    console.log('📥 Download document request:', { course_id, document_id, student_email });
+
+    // Find the course
+    const course = await CourseMaterial.findById(course_id);
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
     // Check enrollment
     const enrollment = await StudentEnrollment.findOne({
       student_email,
+      course_category: course.course_category,
       payment_status: 'verified',
       enrollment_status: 'active'
     });
 
     if (!enrollment) {
-      return res.status(403).json({ success: false, error: 'Not enrolled' });
+      console.log('❌ No enrollment found for:', { student_email, category: course.course_category });
+      return res.status(403).json({ success: false, error: 'You are not enrolled in this course' });
     }
 
-    // Get course and document
-    const course = await CourseMaterial.findById(course_id);
-    if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
-
+    // Find the document
     const document = course.materials.documents.id(document_id);
-    if (!document) return res.status(404).json({ success: false, error: 'Document not found' });
-
-    if (!document.is_public) {
-      return res.status(403).json({ success: false, error: 'Document not available' });
+    if (!document) {
+      return res.status(404).json({ success: false, error: 'Document not found' });
     }
 
-    // Get Cloudinary URL
+    // Check if document is public
+    if (!document.is_public) {
+      return res.status(403).json({ success: false, error: 'This document is not available for download' });
+    }
+
+    // Get document URL
     let downloadUrl = document.file_url;
     
     // If no URL but has public_id, construct it
@@ -93,77 +121,160 @@ const downloadDocument = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Document URL not found' });
     }
 
-    // Set download headers
-    res.setHeader('Content-Disposition', `attachment; filename="${document.original_name || document.title}"`);
-    res.redirect(downloadUrl);
+    console.log('✅ Document download authorized, redirecting to:', downloadUrl);
+
+    // Set filename for download
+    const filename = document.original_name || `${document.title}.${document.file_type}`;
+    
+    // For Cloudinary, add download flag
+    if (downloadUrl.includes('cloudinary.com')) {
+      if (downloadUrl.includes('/upload/')) {
+        downloadUrl = downloadUrl.replace('/upload/', `/upload/fl_attachment:${filename}/`);
+      }
+      return res.redirect(downloadUrl);
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.redirect(downloadUrl);
 
   } catch (error) {
-    console.error('Download document error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Download document error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 
-// View file (inline)
-// Fix the viewFile function in studentDownloadController.js
+// View file - FIXED to handle both formats
 const viewFile = async (req, res) => {
   try {
-    const { public_id } = req.params;
     const student_email = req.user.email;
-
-    // Check if student has access to this specific file
-    // Find any course that has this file and student is enrolled in that course category
-    const enrollments = await StudentEnrollment.find({
-      student_email,
-      payment_status: 'verified',
-      enrollment_status: 'active'
-    });
-
-    if (enrollments.length === 0) {
-      return res.status(403).json({ success: false, error: 'Not enrolled in any courses' });
-    }
-
-    const enrolledCategories = enrollments.map(e => e.course_category);
     
-    // Find a course that contains this public_id and student has access to
-    const course = await CourseMaterial.findOne({
-      course_category: { $in: enrolledCategories },
-      $or: [
-        { 'materials.videos.public_id': public_id },
-        { 'materials.documents.public_id': public_id }
-      ]
-    });
+    // Check if it's the new format with course_id and file_id
+    if (req.params.course_id && req.params.file_id && req.params.file_type) {
+      const { course_id, file_id, file_type } = req.params;
+      
+      console.log('👁️ View file request (with course context):', { course_id, file_id, file_type, student_email });
 
-    if (!course) {
-      return res.status(403).json({ 
+      // Find the course
+      const course = await CourseMaterial.findById(course_id);
+      if (!course) {
+        return res.status(404).json({ success: false, error: 'Course not found' });
+      }
+
+      // Check enrollment
+      const enrollment = await StudentEnrollment.findOne({
+        student_email,
+        course_category: course.course_category,
+        payment_status: 'verified',
+        enrollment_status: 'active'
+      });
+
+      if (!enrollment) {
+        return res.status(403).json({ success: false, error: 'You are not enrolled in this course' });
+      }
+
+      let fileUrl = null;
+
+      // Find the file based on type
+      if (file_type === 'video') {
+        const video = course.materials.videos.id(file_id);
+        if (!video) {
+          return res.status(404).json({ success: false, error: 'Video not found' });
+        }
+        if (!video.is_public) {
+          return res.status(403).json({ success: false, error: 'This video is not available' });
+        }
+        fileUrl = video.video_url;
+        
+        if (!fileUrl && video.public_id) {
+          fileUrl = `https://res.cloudinary.com/dpsssv5tg/video/upload/${video.public_id}`;
+        }
+      } else {
+        const document = course.materials.documents.id(file_id);
+        if (!document) {
+          return res.status(404).json({ success: false, error: 'Document not found' });
+        }
+        if (!document.is_public) {
+          return res.status(403).json({ success: false, error: 'This document is not available' });
+        }
+        fileUrl = document.file_url;
+        
+        if (!fileUrl && document.public_id) {
+          const resourceType = document.file_type === 'pdf' ? 'image' : 'raw';
+          fileUrl = `https://res.cloudinary.com/dpsssv5tg/${resourceType}/upload/${document.public_id}`;
+        }
+      }
+
+      if (!fileUrl) {
+        return res.status(404).json({ success: false, error: 'File URL not found' });
+      }
+
+      console.log('✅ File view authorized, redirecting to:', fileUrl);
+      return res.redirect(fileUrl);
+      
+    } 
+    // Handle old format with just public_id
+    else if (req.params.public_id) {
+      const { public_id } = req.params;
+      
+      console.log('👁️ View file request (public_id only):', { public_id, student_email });
+
+      // Find any course that contains this public_id and student is enrolled in that category
+      const enrollments = await StudentEnrollment.find({
+        student_email,
+        payment_status: 'verified',
+        enrollment_status: 'active'
+      });
+
+      if (enrollments.length === 0) {
+        return res.status(403).json({ success: false, error: 'Not enrolled in any courses' });
+      }
+
+      const enrolledCategories = enrollments.map(e => e.course_category);
+      
+      // Find a course that contains this public_id
+      const course = await CourseMaterial.findOne({
+        course_category: { $in: enrolledCategories },
+        $or: [
+          { 'materials.videos.public_id': public_id },
+          { 'materials.documents.public_id': public_id }
+        ]
+      });
+
+      if (!course) {
+        return res.status(403).json({ 
+          success: false, 
+          error: 'File not found or access denied' 
+        });
+      }
+
+      // Determine resource type and construct URL
+      let resourceType = 'raw';
+      
+      const video = course.materials.videos.find(v => v.public_id === public_id);
+      if (video) {
+        resourceType = 'video';
+      }
+      
+      const document = course.materials.documents.find(d => d.public_id === public_id);
+      if (document) {
+        resourceType = document.file_type === 'pdf' ? 'image' : 'raw';
+      }
+
+      const viewUrl = `https://res.cloudinary.com/dpsssv5tg/${resourceType}/upload/${public_id}`;
+      console.log('✅ File view authorized (public_id), redirecting to:', viewUrl);
+      return res.redirect(viewUrl);
+    }
+    
+    else {
+      return res.status(400).json({ 
         success: false, 
-        error: 'File not found or access denied' 
+        error: 'Invalid request. Provide either course_id/file_id or public_id' 
       });
     }
 
-    // Determine resource type and construct URL
-    let resourceType = 'raw';
-    
-    // Check if it's a video
-    const video = course.materials.videos.find(v => v.public_id === public_id);
-    if (video) {
-      resourceType = 'video';
-    }
-    
-    // Check if it's a document
-    const document = course.materials.documents.find(d => d.public_id === public_id);
-    if (document) {
-      resourceType = document.file_type === 'pdf' ? 'image' : 'raw';
-    }
-
-    // Construct Cloudinary URL
-    const viewUrl = `https://res.cloudinary.com/dpsssv5tg/${resourceType}/upload/${public_id}`;
-    
-    // Redirect to Cloudinary for viewing
-    res.redirect(viewUrl);
-
   } catch (error) {
-    console.error('View file error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ View file error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 
