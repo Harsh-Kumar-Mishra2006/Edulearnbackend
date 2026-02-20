@@ -101,6 +101,33 @@ const courseMaterialSchema = new mongoose.Schema({
         enum: ['notes', 'assignment', 'resource', 'slides', 'other'],
         default: 'notes'
       },
+       cloudinary_data: {
+        public_id: String,
+        url: String,
+        secure_url: String,
+        format: String,
+        bytes: Number
+      },
+      
+      local_file: {
+        filename: String,
+        originalName: String,
+        path: String,
+        mimetype: String,
+        size: Number,
+        exists: { type: Boolean, default: true }
+      },
+      available_storages: [{
+        type: String,
+        enum: ['cloudinary', 'local'],
+        default: ['cloudinary']
+      }],
+      
+      primary_storage: {
+        type: String,
+        enum: ['cloudinary', 'local'],
+        default: 'cloudinary'
+      },
       original_filename: String
     }],
     meetings: [{

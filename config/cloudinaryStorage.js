@@ -194,7 +194,26 @@ const testCloudinaryConnection = async () => {
     return false;
   }
 };
-
+const uploadToCloudinary = (filePath, options = {}) => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload(
+      filePath,
+      {
+        folder: options.folder || 'course_materials',
+        resource_type: options.resource_type || 'auto',
+        public_id: options.public_id,
+        ...options
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+  });
+};
 module.exports = {
   cloudinary,
   uploadVideo,
@@ -202,5 +221,6 @@ module.exports = {
   getCloudinaryUrl,
   getVideoThumbnail,
   deleteFile,
-  testCloudinaryConnection
+  testCloudinaryConnection,
+  uploadToCloudinary
 };

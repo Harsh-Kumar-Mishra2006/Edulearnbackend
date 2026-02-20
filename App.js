@@ -24,6 +24,8 @@ const {logger} = require('./utils/emailTemplates');
 const testEmailRoute = require('./routes/testEmail');
 const assignmentRoutes = require('./routes/assignmentRoutes');
 const studentCourseRoutes = require('./routes/studentCourseRoutes');
+const querryRoutes = require('./routes/querryRoute');
+const documentRoutes = require('./routes/documentRoutes');
 // Initialize express app
 const app = express();
 connectDB();
@@ -262,9 +264,8 @@ app.use('/api/certificates', CertificateRoutes);
 app.use('/api/my-learning', Mylearning);
 app.use('/api/quiz', QuestionRoutes);
 app.use('/api/certificates', CertificateRoutes);
-
-// ❌ REMOVE THIS DUPLICATE LINE (line ~149 in your original code):
-// app.use('/uploads', express.static('uploads'));
+app.use('/api/queries', querryRoutes);
+app.use('/api/documents', documentRoutes);
 
 app.use('/api/teacher/courses', newCourse);
 app.use('/api/email', emailRoutes);
