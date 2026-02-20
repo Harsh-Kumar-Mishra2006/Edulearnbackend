@@ -1,5 +1,5 @@
 // controllers/querryController.js
-const QuerryForm = require('../models/querryformmodel');
+const QuerryForm = require('../models/querryFormModel');
 
 // Submit a new query
 // In querryController.js - update submitQuery function
