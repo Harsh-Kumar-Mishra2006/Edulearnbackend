@@ -54,4 +54,30 @@ router.get('/local/:filename', (req, res) => {
 // Health check endpoint
 router.get('/storage/health', checkDocumentHealth);
 
+router.get('/local/:filename', async (req, res) => {
+  const { filename } = req.params;
+  const token = req.query.token || req.header('Authorization')?.replace('Bearer ', '');
+  
+  // Verify token (basic verification)
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, 'mypassword');
+    
+    // User is authenticated, serve the file
+    const filePath = path.join(__dirname, '../uploads/documents/', filename);
+    
+    if (fs.existsSync(filePath)) {
+      res.sendFile(path.resolve(filePath));
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 module.exports = router;
