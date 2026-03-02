@@ -168,19 +168,20 @@ const uploadVideoToCourse = async (req, res) => {
 };
 
 // Upload document to course - FIXED VERSION
+// controllers/courseMaterialController.js - UPDATE THIS FUNCTION
 const uploadDocumentToCourse = async (req, res) => {
   try {
     console.log('📤 Saving document metadata...');
     console.log('📦 Document request body:', JSON.stringify(req.body, null, 2));
     
     const { course_id } = req.params;
-    const { title, description, cloudinary_url, cloudinary_public_id, file_size, mimetype, original_name, is_public = true, document_type = 'notes', file_extension } = req.body;
+    const { title, description, file_url, file_size, mimetype, original_name, is_public = true, document_type = 'notes', file_extension } = req.body;
 
     // Check required fields
-    if (!cloudinary_url || !cloudinary_public_id) {
+    if (!file_url) {
       return res.status(400).json({
         success: false,
-        error: "Cloudinary URL and public_id are required"
+        error: "File URL is required"
       });
     }
 
@@ -200,15 +201,25 @@ const uploadDocumentToCourse = async (req, res) => {
     const documentData = {
       title: title || `Document ${course.materials.documents.length + 1}`,
       description: description || '',
-      file_url: cloudinary_url,
-      public_id: cloudinary_public_id,
+      file_url: file_url,
       file_type: file_extension || (original_name ? original_name.split('.').pop().toLowerCase() : 'unknown'),
-      file_size: parseInt(file_size), // Ensure it's a number
+      file_size: parseInt(file_size),
       mimetype: mimetype,
       original_name: original_name,
       is_public: is_public === true || is_public === 'true',
       document_type: document_type,
-      upload_date: new Date()
+      upload_date: new Date(),
+      
+      // Local storage info
+      storage_type: 'local',
+      local_file: {
+        filename: original_name ? original_name.replace(/\s+/g, '_') : `doc_${Date.now()}`,
+        originalName: original_name,
+        path: file_url, // Will be updated with actual path
+        mimetype: mimetype,
+        size: parseInt(file_size),
+        exists: true
+      }
     };
 
     console.log('✅ Document data prepared:', documentData);

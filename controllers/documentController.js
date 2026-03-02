@@ -1,15 +1,15 @@
+// controllers/documentController.js - LOCAL STORAGE ONLY VERSION
 const CourseMaterial = require('../models/courseMaterialdata');
-const { uploadToCloudinary } = require('../config/cloudinaryStorage');
 const fs = require('fs');
 const path = require('path');
 
-// Upload document with dual storage (Cloudinary + Local)
-const uploadDocumentDual = async (req, res) => {
+// Upload document to local storage only
+const uploadDocumentLocal = async (req, res) => {
   try {
     const { course_id } = req.params;
     const { title, description, document_type = 'notes', is_public = true } = req.body;
 
-    console.log('📄 Starting dual document upload...');
+    console.log('📄 Starting local document upload...');
     
     // Check if file was uploaded via multer
     if (!req.file) {
@@ -36,7 +36,11 @@ const uploadDocumentDual = async (req, res) => {
 
     console.log('✅ Course found, processing file...');
 
-    // Prepare document data
+    // Generate file URL
+    const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
+    const fileUrl = `${baseUrl}/api/documents/local/${req.file.filename}`;
+
+    // Prepare document data - LOCAL STORAGE ONLY
     const documentData = {
       title: title || req.file.originalname,
       description: description || '',
@@ -47,53 +51,20 @@ const uploadDocumentDual = async (req, res) => {
       document_type: document_type,
       upload_date: new Date(),
       
-      // Track available storages
-      available_storages: ['local'],
-      primary_storage: 'local'
-    };
-
-    // 1. Store local file info
-    documentData.local_file = {
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      path: req.file.path,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      exists: true
-    };
-
-    // 2. Try to upload to Cloudinary (but don't fail if it doesn't work)
-    try {
-      console.log('☁️ Attempting Cloudinary upload...');
-      const cloudinaryResult = await uploadToCloudinary(req.file.path, {
-        folder: 'course_documents',
-        resource_type: 'auto',
-        public_id: `doc_${Date.now()}`
-      });
-
-      if (cloudinaryResult && cloudinaryResult.secure_url) {
-        // Add Cloudinary data
-        documentData.cloudinary_data = {
-          public_id: cloudinaryResult.public_id,
-          url: cloudinaryResult.url,
-          secure_url: cloudinaryResult.secure_url,
-          format: cloudinaryResult.format,
-          bytes: cloudinaryResult.bytes
-        };
-        
-        // Add to available storages
-        documentData.available_storages.push('cloudinary');
-        documentData.primary_storage = 'cloudinary'; // Prefer Cloudinary
-        documentData.file_url = cloudinaryResult.secure_url;
-        
-        console.log('✅ Cloudinary upload successful');
+      // Local storage only
+      file_url: fileUrl,
+      storage_type: 'local',
+      local_file: {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        path: req.file.path,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        exists: true
       }
-    } catch (cloudinaryError) {
-      console.log('⚠️ Cloudinary upload failed, using local storage only:', cloudinaryError.message);
-      // If Cloudinary fails, use local URL
-      const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
-      documentData.file_url = `${baseUrl}/api/documents/local/${req.file.filename}`;
-    }
+    };
+
+    console.log('✅ Document data prepared:', documentData);
 
     // Add document to course
     course.materials.documents.push(documentData);
@@ -102,25 +73,19 @@ const uploadDocumentDual = async (req, res) => {
     // Get the newly added document
     const newDocument = course.materials.documents[course.materials.documents.length - 1];
 
-   // After saving, before sending response
-const cloudinarySuccess = !!(documentData.cloudinary_data && documentData.cloudinary_data.secure_url);
-
-res.status(201).json({
-  success: true,
-  message: cloudinarySuccess ? 
-    "Document uploaded to both Cloudinary and local storage" : 
-    "Document uploaded to local storage only",
-  data: {
-    document: newDocument,
-    storage_methods: documentData.available_storages,
-    primary_storage: documentData.primary_storage,
-    course: {
-      id: course._id,
-      title: course.course_title,
-      total_documents: course.materials.documents.length
-    }
-  }
-});
+    res.status(201).json({
+      success: true,
+      message: "Document uploaded to local storage successfully",
+      data: {
+        document: newDocument,
+        storage_type: 'local',
+        course: {
+          id: course._id,
+          title: course.course_title,
+          total_documents: course.materials.documents.length
+        }
+      }
+    });
 
   } catch (error) {
     console.error('❌ Document upload error:', error);
@@ -141,7 +106,55 @@ res.status(201).json({
   }
 };
 
-// Smart download function - tries Cloudinary first, falls back to local
+// Serve document from local storage
+const serveDocument = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    // Security: Prevent directory traversal attacks
+    const safeFilename = path.basename(filename);
+    const filePath = path.join(__dirname, '../uploads/documents/', safeFilename);
+    
+    console.log('📂 Serving local file:', filePath);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      console.log('❌ File not found:', filePath);
+      
+      // Try alternate paths
+      const alternatePaths = [
+        `uploads/documents/${safeFilename}`,
+        `uploads/${safeFilename}`,
+        `./uploads/documents/${safeFilename}`
+      ];
+      
+      for (const altPath of alternatePaths) {
+        const fullPath = path.resolve(altPath);
+        if (fs.existsSync(fullPath)) {
+          console.log('✅ Found file at alternate path:', fullPath);
+          return res.sendFile(fullPath);
+        }
+      }
+      
+      return res.status(404).json({ 
+        success: false, 
+        error: 'File not found' 
+      });
+    }
+    
+    // Send the file
+    res.sendFile(filePath);
+    
+  } catch (error) {
+    console.error('❌ Error serving file:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error serving file: ' + error.message 
+    });
+  }
+};
+
+// Download document (forces download)
 const downloadDocument = async (req, res) => {
   try {
     const { course_id, document_id } = req.params;
@@ -167,83 +180,61 @@ const downloadDocument = async (req, res) => {
       });
     }
 
-    // TRY CLOUDINARY FIRST (if available)
-    if (document.cloudinary_data && document.cloudinary_data.secure_url) {
-      try {
-        console.log('☁️ Attempting Cloudinary download...');
-        
-        // Test if Cloudinary URL is accessible
-        const response = await fetch(document.cloudinary_data.secure_url, { method: 'HEAD' });
-        
-        if (response.ok) {
-          console.log('✅ Cloudinary URL working, redirecting...');
-          return res.redirect(document.cloudinary_data.secure_url);
+    // Check if user is authorized (teacher or enrolled student)
+    const isTeacher = course.teacher_id.toString() === req.user.userId;
+    const isEnrolled = req.user.role === 'student'; // Add proper enrollment check
+    
+    if (!isTeacher && !isEnrolled) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied"
+      });
+    }
+
+    // Get file path
+    let filePath = document.local_file?.path;
+    
+    if (!filePath || !fs.existsSync(filePath)) {
+      // Try to find file by filename
+      const filename = document.local_file?.filename || document.original_filename;
+      const possiblePaths = [
+        path.join(__dirname, '../uploads/documents/', filename),
+        path.join(process.cwd(), 'uploads/documents/', filename),
+        `./uploads/documents/${filename}`
+      ];
+      
+      for (const altPath of possiblePaths) {
+        if (fs.existsSync(altPath)) {
+          filePath = altPath;
+          break;
         }
-      } catch (cloudinaryError) {
-        console.log('⚠️ Cloudinary unavailable, falling back to local:', cloudinaryError.message);
       }
     }
 
-    // FALLBACK TO LOCAL STORAGE
-    if (document.local_file && document.local_file.path) {
-      console.log('💾 Falling back to local storage...');
-      
-      const filePath = document.local_file.path;
-      
-      if (fs.existsSync(filePath)) {
-        res.setHeader('Content-Type', document.local_file.mimetype || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${document.local_file.originalName}"`);
-        res.setHeader('X-Storage-Source', 'local'); // Custom header to indicate source
-        
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-        
-        fileStream.on('error', (error) => {
-          console.error('Error streaming file:', error);
-          if (!res.headersSent) {
-            res.status(500).json({
-              success: false,
-              error: "Error downloading file"
-            });
-          }
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        error: "Document file not available"
+      });
+    }
+
+    // Set headers for download
+    const filename = document.original_filename || `${document.title}.${document.file_type}`;
+    res.setHeader('Content-Type', document.local_file?.mimetype || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Storage-Source', 'local');
+
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+    fileStream.on('error', (error) => {
+      console.error('Error streaming file:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: "Error downloading file"
         });
-        
-        return;
-      } else {
-        console.log('❌ Local file missing at path:', filePath);
-        
-        // Try alternate paths
-        const filename = document.local_file.filename;
-        const alternatePaths = [
-          `uploads/documents/${filename}`,
-          `uploads/${filename}`,
-          `./uploads/documents/${filename}`
-        ];
-        
-        for (const altPath of alternatePaths) {
-          if (fs.existsSync(altPath)) {
-            console.log('✅ Found file at alternate path:', altPath);
-            
-            res.setHeader('Content-Type', document.local_file.mimetype || 'application/octet-stream');
-            res.setHeader('Content-Disposition', `attachment; filename="${document.local_file.originalName}"`);
-            res.setHeader('X-Storage-Source', 'local-alt');
-            
-            const fileStream = fs.createReadStream(altPath);
-            fileStream.pipe(res);
-            return;
-          }
-        }
-      }
-    }
-
-    // If all attempts fail
-    res.status(404).json({
-      success: false,
-      error: "Document file not available in any storage",
-      details: {
-        cloudinary: !!document.cloudinary_data,
-        local: !!document.local_file,
-        local_path_exists: document.local_file ? fs.existsSync(document.local_file.path) : false
       }
     });
 
@@ -256,7 +247,7 @@ const downloadDocument = async (req, res) => {
   }
 };
 
-// Get document info with storage status
+// Get document info
 const getDocumentInfo = async (req, res) => {
   try {
     const { course_id, document_id } = req.params;
@@ -293,13 +284,12 @@ const getDocumentInfo = async (req, res) => {
         upload_date: document.upload_date,
         original_filename: document.original_filename,
         storage: {
-          cloudinary: !!document.cloudinary_data,
-          local: localFileExists,
-          available: document.available_storages || [],
-          primary: document.primary_storage || 'cloudinary'
+          type: 'local',
+          available: localFileExists
         },
         file_url: document.file_url,
-        download_url: `/api/courses/${course_id}/documents/${document._id}/download`
+        download_url: `/api/documents/courses/${course_id}/documents/${document._id}/download`,
+        view_url: document.file_url // Direct view URL
       }
     });
 
@@ -312,55 +302,27 @@ const getDocumentInfo = async (req, res) => {
   }
 };
 
-// Health check endpoint to verify storage
-const checkDocumentHealth = async (req, res) => {
+// Health check
+const checkStorageHealth = async (req, res) => {
   try {
-    const stats = {
-      cloudinary: { working: false, message: '' },
-      local: { working: false, message: '' },
-      documents: { total: 0, cloudinary_only: 0, local_only: 0, both: 0 }
-    };
-
-    // Check Cloudinary
-    try {
-      const { cloudinary } = require('../config/cloudinaryConfig');
-      const result = await cloudinary.api.ping();
-      stats.cloudinary.working = true;
-      stats.cloudinary.message = 'Connected';
-    } catch (error) {
-      stats.cloudinary.message = error.message;
+    const uploadDir = path.join(__dirname, '../uploads/documents/');
+    const dirExists = fs.existsSync(uploadDir);
+    
+    let fileCount = 0;
+    if (dirExists) {
+      fileCount = fs.readdirSync(uploadDir).length;
     }
-
-    // Check local storage
-    const uploadDir = 'uploads/documents/';
-    stats.local.working = fs.existsSync(uploadDir);
-    stats.local.message = stats.local.working ? 'Directory exists' : 'Directory missing';
-
-    // Check some documents
-    const courses = await CourseMaterial.find({ 'materials.documents.0': { $exists: true } })
-      .limit(5)
-      .select('materials.documents');
-
-    courses.forEach(course => {
-      course.materials.documents.forEach(doc => {
-        stats.documents.total++;
-        
-        const hasCloudinary = !!(doc.cloudinary_data && doc.cloudinary_data.secure_url);
-        const hasLocal = !!(doc.local_file && fs.existsSync(doc.local_file.path));
-        
-        if (hasCloudinary && hasLocal) stats.documents.both++;
-        else if (hasCloudinary) stats.documents.cloudinary_only++;
-        else if (hasLocal) stats.documents.local_only++;
-      });
-    });
 
     res.json({
       success: true,
       timestamp: new Date(),
-      storage_stats: stats,
-      recommendation: stats.cloudinary.working ? 
-        'Cloudinary is working - documents will be served from CDN' :
-        'Cloudinary is down - using local storage fallback'
+      storage: {
+        type: 'local',
+        directory: uploadDir,
+        exists: dirExists,
+        file_count: fileCount,
+        status: dirExists ? 'healthy' : 'unhealthy'
+      }
     });
 
   } catch (error) {
@@ -372,8 +334,9 @@ const checkDocumentHealth = async (req, res) => {
 };
 
 module.exports = {
-  uploadDocumentDual,
+  uploadDocumentLocal,
+  serveDocument,
   downloadDocument,
   getDocumentInfo,
-  checkDocumentHealth
+  checkStorageHealth
 };

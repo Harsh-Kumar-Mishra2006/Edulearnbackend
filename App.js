@@ -32,6 +32,20 @@ connectDB();
 const path = require('path');
 const fs = require('fs');
 
+
+const uploadDirs = [
+  'uploads/documents',
+  'uploads/videos',
+  'uploads/temp'
+];
+
+uploadDirs.forEach(dir => {
+  const fullPath = path.join(__dirname, dir);
+  if (!fs.existsSync(fullPath)) {
+    fs.mkdirSync(fullPath, { recursive: true });
+    console.log(`✅ Created directory: ${dir}`);
+  }
+});
 // ✅ CORRECT: Dynamic file resolver with proper wildcard syntax
 // Remove the problematic dynamic route:
 // app.get('/uploads/*', (req, res) => { ... });
