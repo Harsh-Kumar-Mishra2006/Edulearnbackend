@@ -1,4 +1,4 @@
-// routes/documentRoutes.js - LOCAL STORAGE ONLY VERSION
+// routes/documentRoutes.js - FIXED VERSION
 const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/multerStorage');
@@ -13,7 +13,6 @@ const {
 } = require('../controllers/documentController');
 
 // ============ TEACHER ROUTES ============
-// Upload document to local storage
 router.post(
   '/courses/:course_id/upload',
   teacherAuth,
@@ -21,8 +20,15 @@ router.post(
   uploadDocumentLocal
 );
 
-// ============ STUDENT ROUTES ============
-// Download document
+// ============ STUDENT ROUTES - FIXED ============
+// View document (with auth check)
+router.get(
+  '/courses/:course_id/documents/:document_id/view',
+  studentAuth,
+  serveDocument  // This should serve the file with proper headers
+);
+
+// Download document (with auth check)
 router.get(
   '/courses/:course_id/documents/:document_id/download',
   studentAuth,
@@ -36,8 +42,8 @@ router.get(
   getDocumentInfo
 );
 
-// ============ PUBLIC ROUTES ============
-// Serve local files directly (no auth needed for viewing - but file URL is obfuscated)
+// ============ DIRECT FILE ACCESS (NO AUTH) ============
+// This should be protected by obfuscated filename only
 router.get('/local/:filename', serveDocument);
 
 // Health check endpoint

@@ -2,8 +2,214 @@
 const CourseMaterial = require('../models/courseMaterialdata');
 const fs = require('fs');
 const path = require('path');
+// controllers/documentController.js - ADD THIS HELPER FUNCTION AT THE TOP
+const StudentEnrollment = require('../models/Mylearningmodel'); // Add this require
 
-// Upload document to local storage only
+// Helper function to check enrollment
+const checkEnrollment = async (student_email, course_category) => {
+  try {
+    const enrollment = await StudentEnrollment.findOne({
+      student_email,
+      course_category,
+      payment_status: 'verified',
+      enrollment_status: 'active'
+    });
+    return !!enrollment;
+  } catch (error) {
+    console.error('Error checking enrollment:', error);
+    return false;
+  }
+};
+
+// UPDATE serveDocument function with proper enrollment check
+const serveDocument = async (req, res) => {
+  try {
+    const { filename, course_id, document_id } = req.params;
+    
+    let targetFilename = filename;
+    let filePath;
+
+    // If we have course_id and document_id, get filename from database
+    if (course_id && document_id) {
+      const course = await CourseMaterial.findOne({
+        _id: course_id,
+        'materials.documents._id': document_id
+      });
+
+      if (!course) {
+        return res.status(404).json({ success: false, error: 'Document not found' });
+      }
+
+      const document = course.materials.documents.id(document_id);
+      
+      // ✅ FIXED: Proper enrollment check
+      const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
+      
+      // Check if user is enrolled student
+      let isEnrolled = false;
+      if (req.user?.email && req.user?.role === 'student') {
+        isEnrolled = await checkEnrollment(req.user.email, course.course_category);
+      }
+      
+      if (!isTeacher && !isEnrolled && !document.is_public) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
+      // Get filename from document
+      targetFilename = document.local_file?.filename || document.original_filename;
+      
+      if (!targetFilename) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+    }
+
+    // Security: Prevent directory traversal
+    const safeFilename = path.basename(targetFilename);
+    
+    // Try multiple possible paths
+    const possiblePaths = [
+      path.join(__dirname, '../uploads/documents/', safeFilename),
+      path.join(process.cwd(), 'uploads/documents/', safeFilename),
+      path.join(__dirname, '../../uploads/documents/', safeFilename)
+    ];
+
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        filePath = testPath;
+        break;
+      }
+    }
+
+    if (!filePath) {
+      console.log('❌ File not found in any location:', safeFilename);
+      return res.status(404).json({ success: false, error: 'File not found' });
+    }
+
+    console.log('✅ Serving file:', filePath);
+
+    // Get file extension for content type
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypes = {
+      '.pdf': 'application/pdf',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.ppt': 'application/vnd.ms-powerpoint',
+      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.txt': 'text/plain',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.zip': 'application/zip'
+    };
+
+    const contentType = contentTypes[ext] || 'application/octet-stream';
+
+    // Set headers for viewing
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', fs.statSync(filePath).size);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    // For PDFs, allow embedding
+    if (ext === '.pdf') {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+    fileStream.on('error', (error) => {
+      console.error('Error streaming file:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Error serving file' });
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error serving file:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// UPDATE downloadDocument function with proper enrollment check
+const downloadDocument = async (req, res) => {
+  try {
+    const { course_id, document_id } = req.params;
+
+    const course = await CourseMaterial.findOne({
+      _id: course_id,
+      'materials.documents._id': document_id
+    });
+
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Document not found' });
+    }
+
+    const document = course.materials.documents.id(document_id);
+    
+    // ✅ FIXED: Proper enrollment check
+    const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
+    
+    // Check if user is enrolled student
+    let isEnrolled = false;
+    if (req.user?.email && req.user?.role === 'student') {
+      isEnrolled = await checkEnrollment(req.user.email, course.course_category);
+    }
+    
+    if (!isTeacher && !isEnrolled && !document.is_public) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Get filename
+    let filename = document.local_file?.filename || document.original_filename;
+    
+    if (!filename) {
+      return res.status(404).json({ success: false, error: 'File not found' });
+    }
+
+    // Find file path
+    const safeFilename = path.basename(filename);
+    let filePath = null;
+    
+    const possiblePaths = [
+      path.join(__dirname, '../uploads/documents/', safeFilename),
+      path.join(process.cwd(), 'uploads/documents/', safeFilename),
+      path.join(__dirname, '../../uploads/documents/', safeFilename)
+    ];
+
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        filePath = testPath;
+        break;
+      }
+    }
+
+    if (!filePath) {
+      return res.status(404).json({ success: false, error: 'File not found on server' });
+    }
+
+    // Set headers for download
+    const downloadName = document.original_filename || `${document.title}.${document.file_type}`;
+    res.setHeader('Content-Type', document.local_file?.mimetype || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
+    res.setHeader('Content-Length', fs.statSync(filePath).size);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Keep all other functions unchanged
+
+// Upload document (already working)
 const uploadDocumentLocal = async (req, res) => {
   try {
     const { course_id } = req.params;
@@ -11,48 +217,34 @@ const uploadDocumentLocal = async (req, res) => {
 
     console.log('📄 Starting local document upload...');
     
-    // Check if file was uploaded via multer
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: "No file uploaded"
-      });
+      return res.status(400).json({ success: false, error: "No file uploaded" });
     }
 
-    // Find the course
     const course = await CourseMaterial.findOne({
       _id: course_id,
       teacher_id: req.user.userId
     });
 
     if (!course) {
-      // Clean up uploaded file
       fs.unlinkSync(req.file.path);
-      return res.status(404).json({
-        success: false,
-        error: "Course not found or access denied"
-      });
+      return res.status(404).json({ success: false, error: "Course not found" });
     }
 
-    console.log('✅ Course found, processing file...');
-
-    // Generate file URL
+    // Generate proper file URL - FIXED
     const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
-    const fileUrl = `${baseUrl}/api/documents/local/${req.file.filename}`;
+    const fileUrl = `${baseUrl}/api/documents/local/${req.file.filename}`; // FIXED URL
 
-    // Prepare document data - LOCAL STORAGE ONLY
     const documentData = {
       title: title || req.file.originalname,
       description: description || '',
-      file_type: path.extname(req.file.originalname).substring(1).toLowerCase() || 'unknown',
+      file_type: path.extname(req.file.originalname).substring(1).toLowerCase(),
       file_size: req.file.size,
       original_filename: req.file.originalname,
       is_public: is_public === true || is_public === 'true',
       document_type: document_type,
       upload_date: new Date(),
-      
-      // Local storage only
-      file_url: fileUrl,
+      file_url: fileUrl, // FIXED URL
       storage_type: 'local',
       local_file: {
         filename: req.file.filename,
@@ -64,186 +256,28 @@ const uploadDocumentLocal = async (req, res) => {
       }
     };
 
-    console.log('✅ Document data prepared:', documentData);
-
-    // Add document to course
     course.materials.documents.push(documentData);
     await course.save();
 
-    // Get the newly added document
     const newDocument = course.materials.documents[course.materials.documents.length - 1];
 
     res.status(201).json({
       success: true,
-      message: "Document uploaded to local storage successfully",
+      message: "Document uploaded successfully",
       data: {
         document: newDocument,
-        storage_type: 'local',
-        course: {
-          id: course._id,
-          title: course.course_title,
-          total_documents: course.materials.documents.length
-        }
+        view_url: `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`,
+        download_url: `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`,
+        file_url: fileUrl
       }
     });
 
   } catch (error) {
-    console.error('❌ Document upload error:', error);
-    
-    // Clean up file if it exists
+    console.error('❌ Upload error:', error);
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error('Error cleaning up file:', unlinkError);
-      }
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
-    
-    res.status(500).json({
-      success: false,
-      error: "Error uploading document: " + error.message
-    });
-  }
-};
-
-// Serve document from local storage
-const serveDocument = async (req, res) => {
-  try {
-    const { filename } = req.params;
-    
-    // Security: Prevent directory traversal attacks
-    const safeFilename = path.basename(filename);
-    const filePath = path.join(__dirname, '../uploads/documents/', safeFilename);
-    
-    console.log('📂 Serving local file:', filePath);
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      console.log('❌ File not found:', filePath);
-      
-      // Try alternate paths
-      const alternatePaths = [
-        `uploads/documents/${safeFilename}`,
-        `uploads/${safeFilename}`,
-        `./uploads/documents/${safeFilename}`
-      ];
-      
-      for (const altPath of alternatePaths) {
-        const fullPath = path.resolve(altPath);
-        if (fs.existsSync(fullPath)) {
-          console.log('✅ Found file at alternate path:', fullPath);
-          return res.sendFile(fullPath);
-        }
-      }
-      
-      return res.status(404).json({ 
-        success: false, 
-        error: 'File not found' 
-      });
-    }
-    
-    // Send the file
-    res.sendFile(filePath);
-    
-  } catch (error) {
-    console.error('❌ Error serving file:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error serving file: ' + error.message 
-    });
-  }
-};
-
-// Download document (forces download)
-const downloadDocument = async (req, res) => {
-  try {
-    const { course_id, document_id } = req.params;
-
-    const course = await CourseMaterial.findOne({
-      _id: course_id,
-      'materials.documents._id': document_id
-    });
-
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        error: "Document not found"
-      });
-    }
-
-    const document = course.materials.documents.id(document_id);
-    
-    if (!document) {
-      return res.status(404).json({
-        success: false,
-        error: "Document not found"
-      });
-    }
-
-    // Check if user is authorized (teacher or enrolled student)
-    const isTeacher = course.teacher_id.toString() === req.user.userId;
-    const isEnrolled = req.user.role === 'student'; // Add proper enrollment check
-    
-    if (!isTeacher && !isEnrolled) {
-      return res.status(403).json({
-        success: false,
-        error: "Access denied"
-      });
-    }
-
-    // Get file path
-    let filePath = document.local_file?.path;
-    
-    if (!filePath || !fs.existsSync(filePath)) {
-      // Try to find file by filename
-      const filename = document.local_file?.filename || document.original_filename;
-      const possiblePaths = [
-        path.join(__dirname, '../uploads/documents/', filename),
-        path.join(process.cwd(), 'uploads/documents/', filename),
-        `./uploads/documents/${filename}`
-      ];
-      
-      for (const altPath of possiblePaths) {
-        if (fs.existsSync(altPath)) {
-          filePath = altPath;
-          break;
-        }
-      }
-    }
-
-    if (!filePath || !fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        error: "Document file not available"
-      });
-    }
-
-    // Set headers for download
-    const filename = document.original_filename || `${document.title}.${document.file_type}`;
-    res.setHeader('Content-Type', document.local_file?.mimetype || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('X-Storage-Source', 'local');
-
-    // Stream the file
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-
-    fileStream.on('error', (error) => {
-      console.error('Error streaming file:', error);
-      if (!res.headersSent) {
-        res.status(500).json({
-          success: false,
-          error: "Error downloading file"
-        });
-      }
-    });
-
-  } catch (error) {
-    console.error('Download error:', error);
-    res.status(500).json({
-      success: false,
-      error: "Error downloading document: " + error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
@@ -334,6 +368,7 @@ const checkStorageHealth = async (req, res) => {
 };
 
 module.exports = {
+  checkEnrollment,
   uploadDocumentLocal,
   serveDocument,
   downloadDocument,
