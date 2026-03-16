@@ -1,4 +1,5 @@
 // routes/documentRoutes.js - FIXED VERSION
+
 const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/multerStorage');
@@ -9,7 +10,8 @@ const {
   serveDocument,
   downloadDocument,
   getDocumentInfo,
-  checkStorageHealth
+  checkStorageHealth,
+  listUploadedFiles
 } = require('../controllers/documentController');
 
 // ============ TEACHER ROUTES ============
@@ -20,12 +22,12 @@ router.post(
   uploadDocumentLocal
 );
 
-// ============ STUDENT ROUTES - FIXED ============
-// View document (with auth check)
+// ============ STUDENT ROUTES ============
+// View document (with auth check) - FIXED: Use document_id, not filename
 router.get(
   '/courses/:course_id/documents/:document_id/view',
   studentAuth,
-  serveDocument  // This should serve the file with proper headers
+  serveDocument
 );
 
 // Download document (with auth check)
@@ -42,8 +44,13 @@ router.get(
   getDocumentInfo
 );
 
-// ============ DIRECT FILE ACCESS (NO AUTH) ============
-// This should be protected by obfuscated filename only
+
+// Add to routes
+router.get('/debug/list-files', teacherAuth, listUploadedFiles);
+
+// ============ DIRECT FILE ACCESS (BY FILENAME) ============
+// This route should be used for files referenced directly by filename
+// Note: This route doesn't have authentication - security through obscurity
 router.get('/local/:filename', serveDocument);
 
 // Health check endpoint

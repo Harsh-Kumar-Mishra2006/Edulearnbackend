@@ -21,17 +21,24 @@ const checkEnrollment = async (student_email, course_category) => {
   }
 };
 
-// UPDATE serveDocument function with proper enrollment check
+// controllers/documentController.js - FIXED serveDocument
+
+// controllers/documentController.js - FIXED serveDocument
+
 const serveDocument = async (req, res) => {
   try {
     const { filename, course_id, document_id } = req.params;
     
+    console.log('📄 Serving document request:', { filename, course_id, document_id });
+    
     let targetFilename = filename;
     let filePath;
+    let document;
+    let course;
 
-    // If we have course_id and document_id, get filename from database
+    // Case 1: We have course_id and document_id (authenticated access)
     if (course_id && document_id) {
-      const course = await CourseMaterial.findOne({
+      course = await CourseMaterial.findOne({
         _id: course_id,
         'materials.documents._id': document_id
       });
@@ -40,53 +47,80 @@ const serveDocument = async (req, res) => {
         return res.status(404).json({ success: false, error: 'Document not found' });
       }
 
-      const document = course.materials.documents.id(document_id);
+      document = course.materials.documents.id(document_id);
       
-      // ✅ FIXED: Proper enrollment check
-      const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
-      
-      // Check if user is enrolled student
-      let isEnrolled = false;
-      if (req.user?.email && req.user?.role === 'student') {
-        isEnrolled = await checkEnrollment(req.user.email, course.course_category);
-      }
-      
-      if (!isTeacher && !isEnrolled && !document.is_public) {
-        return res.status(403).json({ success: false, error: 'Access denied' });
+      // Check access permissions (skip for teacher routes or if already authenticated)
+      if (req.user) {
+        const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
+        
+        // Check if user is enrolled student
+        let isEnrolled = false;
+        if (req.user?.email && req.user?.role === 'student') {
+          isEnrolled = await checkEnrollment(req.user.email, course.course_category);
+        }
+        
+        // Allow access if: teacher, enrolled student, or public document
+        if (!isTeacher && !isEnrolled && !document.is_public) {
+          return res.status(403).json({ success: false, error: 'Access denied' });
+        }
       }
 
       // Get filename from document
       targetFilename = document.local_file?.filename || document.original_filename;
       
       if (!targetFilename) {
-        return res.status(404).json({ success: false, error: 'File not found' });
+        return res.status(404).json({ success: false, error: 'File not found in database' });
       }
+    }
+    
+    // Case 2: We only have filename (direct access)
+    else if (filename) {
+      targetFilename = filename;
+      // No authentication check for direct filename access (security through obscurity)
+    }
+    
+    // Case 3: No identifier provided
+    else {
+      return res.status(400).json({ success: false, error: 'No file identifier provided' });
     }
 
     // Security: Prevent directory traversal
     const safeFilename = path.basename(targetFilename);
     
-    // Try multiple possible paths
-    const possiblePaths = [
-      path.join(__dirname, '../uploads/documents/', safeFilename),
-      path.join(process.cwd(), 'uploads/documents/', safeFilename),
-      path.join(__dirname, '../../uploads/documents/', safeFilename)
-    ];
+    // Define the absolute upload directory path
+    const uploadDir = path.join(__dirname, '../uploads/documents/');
+    
+    // Construct the full file path
+    filePath = path.join(uploadDir, safeFilename);
 
-    for (const testPath of possiblePaths) {
-      if (fs.existsSync(testPath)) {
-        filePath = testPath;
-        break;
+    console.log('🔍 Looking for file at:', filePath);
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      console.log('❌ File not found at:', filePath);
+      
+      // Try alternative paths as fallback
+      const altPaths = [
+        path.join(process.cwd(), 'uploads/documents/', safeFilename),
+        path.join(__dirname, '../../uploads/documents/', safeFilename)
+      ];
+      
+      for (const altPath of altPaths) {
+        if (fs.existsSync(altPath)) {
+          filePath = altPath;
+          console.log('✅ Found at alternative path:', filePath);
+          break;
+        }
+      }
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: 'File not found on server' });
       }
     }
 
-    if (!filePath) {
-      console.log('❌ File not found in any location:', safeFilename);
-      return res.status(404).json({ success: false, error: 'File not found' });
-    }
-
-    console.log('✅ Serving file:', filePath);
-
+    // Get file stats
+    const stat = fs.statSync(filePath);
+    
     // Get file extension for content type
     const ext = path.extname(filePath).toLowerCase();
     const contentTypes = {
@@ -107,13 +141,18 @@ const serveDocument = async (req, res) => {
 
     // Set headers for viewing
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', fs.statSync(filePath).size);
+    res.setHeader('Content-Length', stat.size);
     res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
     // For PDFs, allow embedding
     if (ext === '.pdf') {
-      res.setHeader('Content-Disposition', 'inline');
+      const filename = encodeURIComponent(document?.original_filename || safeFilename);
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    } else {
+      const filename = encodeURIComponent(document?.original_filename || safeFilename);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     }
 
     // Stream the file
@@ -133,10 +172,13 @@ const serveDocument = async (req, res) => {
   }
 };
 
-// UPDATE downloadDocument function with proper enrollment check
+// controllers/documentController.js - FIXED downloadDocument
+
 const downloadDocument = async (req, res) => {
   try {
     const { course_id, document_id } = req.params;
+
+    console.log('📥 Download request:', { course_id, document_id });
 
     const course = await CourseMaterial.findOne({
       _id: course_id,
@@ -149,7 +191,7 @@ const downloadDocument = async (req, res) => {
 
     const document = course.materials.documents.id(document_id);
     
-    // ✅ FIXED: Proper enrollment check
+    // ✅ Check access permissions
     const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
     
     // Check if user is enrolled student
@@ -166,50 +208,69 @@ const downloadDocument = async (req, res) => {
     let filename = document.local_file?.filename || document.original_filename;
     
     if (!filename) {
-      return res.status(404).json({ success: false, error: 'File not found' });
+      return res.status(404).json({ success: false, error: 'File not found in database' });
     }
 
     // Find file path
     const safeFilename = path.basename(filename);
-    let filePath = null;
-    
-    const possiblePaths = [
-      path.join(__dirname, '../uploads/documents/', safeFilename),
-      path.join(process.cwd(), 'uploads/documents/', safeFilename),
-      path.join(__dirname, '../../uploads/documents/', safeFilename)
-    ];
+    const uploadDir = path.join(__dirname, '../uploads/documents/');
+    let filePath = path.join(uploadDir, safeFilename);
 
-    for (const testPath of possiblePaths) {
-      if (fs.existsSync(testPath)) {
-        filePath = testPath;
-        break;
+    console.log('🔍 Looking for file at:', filePath);
+
+    if (!fs.existsSync(filePath)) {
+      // Try alternative paths
+      const altPaths = [
+        path.join(process.cwd(), 'uploads/documents/', safeFilename),
+        path.join(__dirname, '../../uploads/documents/', safeFilename)
+      ];
+      
+      let found = false;
+      for (const altPath of altPaths) {
+        if (fs.existsSync(altPath)) {
+          filePath = altPath;
+          found = true;
+          console.log('✅ Found at alternative path:', filePath);
+          break;
+        }
+      }
+      
+      if (!found) {
+        return res.status(404).json({ success: false, error: 'File not found on server' });
       }
     }
 
-    if (!filePath) {
-      return res.status(404).json({ success: false, error: 'File not found on server' });
-    }
+    // Get file stats
+    const stat = fs.statSync(filePath);
 
     // Set headers for download
     const downloadName = document.original_filename || `${document.title}.${document.file_type}`;
     res.setHeader('Content-Type', document.local_file?.mimetype || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
-    res.setHeader('Content-Length', fs.statSync(filePath).size);
+    res.setHeader('Content-Length', stat.size);
     res.setHeader('Cache-Control', 'no-cache');
 
     // Stream the file
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
 
+    fileStream.on('error', (error) => {
+      console.error('Error streaming file for download:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Error downloading file' });
+      }
+    });
+
   } catch (error) {
     console.error('Download error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
-// Keep all other functions unchanged
-
 // Upload document (already working)
+// controllers/documentController.js - FIXED uploadDocumentLocal
+
+// controllers/documentController.js - FIXED uploadDocumentLocal
+
 const uploadDocumentLocal = async (req, res) => {
   try {
     const { course_id } = req.params;
@@ -227,14 +288,14 @@ const uploadDocumentLocal = async (req, res) => {
     });
 
     if (!course) {
-      fs.unlinkSync(req.file.path);
+      // Clean up uploaded file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({ success: false, error: "Course not found" });
     }
 
-    // Generate proper file URL - FIXED
-    const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
-    const fileUrl = `${baseUrl}/api/documents/local/${req.file.filename}`; // FIXED URL
-
+    // First create the document data WITHOUT the URL
     const documentData = {
       title: title || req.file.originalname,
       description: description || '',
@@ -244,7 +305,6 @@ const uploadDocumentLocal = async (req, res) => {
       is_public: is_public === true || is_public === 'true',
       document_type: document_type,
       upload_date: new Date(),
-      file_url: fileUrl, // FIXED URL
       storage_type: 'local',
       local_file: {
         filename: req.file.filename,
@@ -256,19 +316,30 @@ const uploadDocumentLocal = async (req, res) => {
       }
     };
 
+    // Add document to course to get the _id
     course.materials.documents.push(documentData);
     await course.save();
 
+    // Get the newly created document with its _id
     const newDocument = course.materials.documents[course.materials.documents.length - 1];
+
+    // Generate the URL using the document's _id (NOT the filename)
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`;
+    const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`;
+
+    // Update the document with the URLs
+    newDocument.file_url = viewUrl;
+    await course.save();
 
     res.status(201).json({
       success: true,
       message: "Document uploaded successfully",
       data: {
         document: newDocument,
-        view_url: `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`,
-        download_url: `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`,
-        file_url: fileUrl
+        view_url: viewUrl,
+        download_url: downloadUrl,
+        file_url: viewUrl
       }
     });
 
@@ -280,7 +351,6 @@ const uploadDocumentLocal = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
 // Get document info
 const getDocumentInfo = async (req, res) => {
   try {
@@ -367,11 +437,57 @@ const checkStorageHealth = async (req, res) => {
   }
 };
 
+// Add this to documentController.js
+const listUploadedFiles = async (req, res) => {
+  try {
+    const uploadDir = path.join(__dirname, '../uploads/documents/');
+    
+    if (!fs.existsSync(uploadDir)) {
+      return res.json({
+        success: true,
+        directory_exists: false,
+        files: []
+      });
+    }
+    
+    const files = fs.readdirSync(uploadDir);
+    
+    // Get file details
+    const fileDetails = files.map(filename => {
+      const filePath = path.join(uploadDir, filename);
+      const stats = fs.statSync(filePath);
+      return {
+        filename,
+        size: stats.size,
+        created: stats.birthtime,
+        modified: stats.mtime,
+        path: filePath
+      };
+    });
+    
+    res.json({
+      success: true,
+      directory: uploadDir,
+      directory_exists: true,
+      file_count: files.length,
+      files: fileDetails
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+
 module.exports = {
   checkEnrollment,
   uploadDocumentLocal,
   serveDocument,
   downloadDocument,
   getDocumentInfo,
-  checkStorageHealth
+  checkStorageHealth,
+  listUploadedFiles
 };
