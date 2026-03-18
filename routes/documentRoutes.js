@@ -22,38 +22,44 @@ router.post(
   uploadDocumentLocal
 );
 
+// Teacher can also view/download their own documents
+router.get(
+  '/courses/:course_id/documents/:document_id/view',
+  teacherAuth,
+  serveDocument
+);
+
+router.get(
+  '/courses/:course_id/documents/:document_id/download',
+  teacherAuth,
+  downloadDocument
+);
+
 // ============ STUDENT ROUTES ============
-// View document (with auth check) - FIXED: Use document_id, not filename
 router.get(
   '/courses/:course_id/documents/:document_id/view',
   studentAuth,
   serveDocument
 );
 
-// Download document (with auth check)
 router.get(
   '/courses/:course_id/documents/:document_id/download',
   studentAuth,
   downloadDocument
 );
 
-// Get document info
 router.get(
   '/courses/:course_id/documents/:document_id/info',
   studentAuth,
   getDocumentInfo
 );
 
-
-// Add to routes
+// ============ DEBUG ROUTES (Teacher only) ============
 router.get('/debug/list-files', teacherAuth, listUploadedFiles);
-
-// ============ DIRECT FILE ACCESS (BY FILENAME) ============
-// This route should be used for files referenced directly by filename
-// Note: This route doesn't have authentication - security through obscurity
-router.get('/local/:filename', serveDocument);
-
-// Health check endpoint
 router.get('/storage/health', checkStorageHealth);
+
+// ============ DIRECT FILE ACCESS (OPTIONAL - REMOVE IF NOT NEEDED) ============
+// If you need this, add authentication
+// router.get('/local/:filename', teacherAuth, serveDocument);
 
 module.exports = router;

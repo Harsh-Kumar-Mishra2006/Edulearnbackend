@@ -155,26 +155,28 @@ const getMyLearningCourses = async (req, res) => {
               course_status: course.status // Add course status for debugging
             }))
           ),
-          documents: categoryMaterials.flatMap(course => 
-            course.materials.documents.filter(doc => doc.is_public !== false).map(doc => ({
-              _id: doc._id,
-              title: doc.title,
-              description: doc.description,
-              file_url: formatCloudinaryUrlForStudent(doc.file_url, doc.file_type),
-              public_id: doc.public_id, // ADD THIS
-            isAvailable: !!formatCloudinaryUrlForStudent(doc.file_url, doc.file_type),
-              file_type: doc.file_type,
-              file_size: doc.file_size,
-              document_type: doc.document_type,
-              is_public: doc.is_public,
-              upload_date: doc.upload_date,
-              course_title: course.course_title,
-              teacher_name: course.teacher_id?.name || 'Unknown Teacher',
-              teacher_qualification: course.teacher_id?.qualification || '',
-              course_id: course._id,
-              course_status: course.status
-            }))
-          ),
+          // In Mylearningcontroller.js - Update the document mapping
+
+documents: categoryMaterials.flatMap(course => 
+  course.materials.documents.filter(doc => doc.is_public !== false).map(doc => ({
+    _id: doc._id,
+    title: doc.title,
+    description: doc.description,
+    file_url: doc.file_url, // Use the stored file_url (which points to view endpoint)
+    download_url: `/api/documents/courses/${course._id}/documents/${doc._id}/download`,
+    view_url: doc.file_url,
+    file_type: doc.file_type,
+    file_size: doc.file_size,
+    document_type: doc.document_type,
+    is_public: doc.is_public,
+    upload_date: doc.upload_date,
+    course_title: course.course_title,
+    teacher_name: course.teacher_id?.name || 'Unknown Teacher',
+    teacher_qualification: course.teacher_id?.qualification || '',
+    course_id: course._id,
+    course_status: course.status
+  }))
+),
           meetings: categoryMaterials.flatMap(course => 
             course.materials.meetings.filter(meeting => meeting.status === 'scheduled').map(meeting => ({
               _id: meeting._id,

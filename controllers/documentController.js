@@ -25,103 +25,85 @@ const checkEnrollment = async (student_email, course_category) => {
 
 // controllers/documentController.js - FIXED serveDocument
 
+// controllers/documentController.js - FIXED SERVE FUNCTION
+
 const serveDocument = async (req, res) => {
   try {
-    const { filename, course_id, document_id } = req.params;
+    const { course_id, document_id } = req.params;
     
-    console.log('📄 Serving document request:', { filename, course_id, document_id });
+    console.log('📄 Serving document:', { course_id, document_id });
+
+    // Find the course and document
+    const course = await CourseMaterial.findOne({
+      _id: course_id,
+      'materials.documents._id': document_id
+    });
+
+    if (!course) {
+      return res.status(404).json({ success: false, error: 'Document not found' });
+    }
+
+    const document = course.materials.documents.id(document_id);
     
-    let targetFilename = filename;
-    let filePath;
-    let document;
-    let course;
+    if (!document) {
+      return res.status(404).json({ success: false, error: 'Document not found' });
+    }
 
-    // Case 1: We have course_id and document_id (authenticated access)
-    if (course_id && document_id) {
-      course = await CourseMaterial.findOne({
-        _id: course_id,
-        'materials.documents._id': document_id
-      });
-
-      if (!course) {
-        return res.status(404).json({ success: false, error: 'Document not found' });
-      }
-
-      document = course.materials.documents.id(document_id);
+    // Check access permissions
+    if (req.user) {
+      const isTeacher = req.user.userId && course.teacher_id.toString() === req.user.userId;
       
-      // Check access permissions (skip for teacher routes or if already authenticated)
-      if (req.user) {
-        const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
-        
-        // Check if user is enrolled student
-        let isEnrolled = false;
-        if (req.user?.email && req.user?.role === 'student') {
-          isEnrolled = await checkEnrollment(req.user.email, course.course_category);
-        }
-        
-        // Allow access if: teacher, enrolled student, or public document
-        if (!isTeacher && !isEnrolled && !document.is_public) {
-          return res.status(403).json({ success: false, error: 'Access denied' });
-        }
+      let isEnrolled = false;
+      if (req.user.role === 'student') {
+        const StudentEnrollment = require('../models/Mylearningmodel');
+        const enrollment = await StudentEnrollment.findOne({
+          student_email: req.user.email,
+          course_category: course.course_category,
+          payment_status: 'verified',
+          enrollment_status: 'active'
+        });
+        isEnrolled = !!enrollment;
       }
-
-      // Get filename from document
-      targetFilename = document.local_file?.filename || document.original_filename;
       
-      if (!targetFilename) {
-        return res.status(404).json({ success: false, error: 'File not found in database' });
+      if (!isTeacher && !isEnrolled && !document.is_public) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
       }
     }
+
+    // Get filename from document
+    const filename = document.local_file?.filename || document.original_filename;
     
-    // Case 2: We only have filename (direct access)
-    else if (filename) {
-      targetFilename = filename;
-      // No authentication check for direct filename access (security through obscurity)
-    }
-    
-    // Case 3: No identifier provided
-    else {
-      return res.status(400).json({ success: false, error: 'No file identifier provided' });
+    if (!filename) {
+      return res.status(404).json({ success: false, error: 'File not found in database' });
     }
 
     // Security: Prevent directory traversal
-    const safeFilename = path.basename(targetFilename);
+    const safeFilename = path.basename(filename);
     
-    // Define the absolute upload directory path
-    const uploadDir = path.join(__dirname, '../uploads/documents/');
-    
-    // Construct the full file path
-    filePath = path.join(uploadDir, safeFilename);
+    // Find the file
+    const possiblePaths = [
+      path.join(__dirname, '../uploads/documents/', safeFilename),
+      path.join(process.cwd(), 'uploads/documents/', safeFilename),
+      document.local_file?.path
+    ];
 
-    console.log('🔍 Looking for file at:', filePath);
+    let filePath = null;
+    for (const p of possiblePaths) {
+      if (p && fs.existsSync(p)) {
+        filePath = p;
+        break;
+      }
+    }
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      console.log('❌ File not found at:', filePath);
-      
-      // Try alternative paths as fallback
-      const altPaths = [
-        path.join(process.cwd(), 'uploads/documents/', safeFilename),
-        path.join(__dirname, '../../uploads/documents/', safeFilename)
-      ];
-      
-      for (const altPath of altPaths) {
-        if (fs.existsSync(altPath)) {
-          filePath = altPath;
-          console.log('✅ Found at alternative path:', filePath);
-          break;
-        }
-      }
-      
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ success: false, error: 'File not found on server' });
-      }
+    if (!filePath) {
+      console.error('❌ File not found:', safeFilename);
+      return res.status(404).json({ success: false, error: 'File not found on server' });
     }
 
     // Get file stats
     const stat = fs.statSync(filePath);
     
-    // Get file extension for content type
+    // Set content type based on file extension
     const ext = path.extname(filePath).toLowerCase();
     const contentTypes = {
       '.pdf': 'application/pdf',
@@ -139,20 +121,17 @@ const serveDocument = async (req, res) => {
 
     const contentType = contentTypes[ext] || 'application/octet-stream';
 
-    // Set headers for viewing
+    // Set headers
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', stat.size);
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-
+    
     // For PDFs, allow embedding
     if (ext === '.pdf') {
-      const filename = encodeURIComponent(document?.original_filename || safeFilename);
-      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(document.original_filename || safeFilename)}"`);
     } else {
-      const filename = encodeURIComponent(document?.original_filename || safeFilename);
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.original_filename || safeFilename)}"`);
     }
 
     // Stream the file
@@ -171,8 +150,8 @@ const serveDocument = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
 // controllers/documentController.js - FIXED downloadDocument
+// controllers/documentController.js - FIXED DOWNLOAD FUNCTION
 
 const downloadDocument = async (req, res) => {
   try {
@@ -191,13 +170,23 @@ const downloadDocument = async (req, res) => {
 
     const document = course.materials.documents.id(document_id);
     
-    // ✅ Check access permissions
+    if (!document) {
+      return res.status(404).json({ success: false, error: 'Document not found' });
+    }
+
+    // Check access permissions
     const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
     
-    // Check if user is enrolled student
     let isEnrolled = false;
     if (req.user?.email && req.user?.role === 'student') {
-      isEnrolled = await checkEnrollment(req.user.email, course.course_category);
+      const StudentEnrollment = require('../models/Mylearningmodel');
+      const enrollment = await StudentEnrollment.findOne({
+        student_email: req.user.email,
+        course_category: course.course_category,
+        payment_status: 'verified',
+        enrollment_status: 'active'
+      });
+      isEnrolled = !!enrollment;
     }
     
     if (!isTeacher && !isEnrolled && !document.is_public) {
@@ -205,46 +194,36 @@ const downloadDocument = async (req, res) => {
     }
 
     // Get filename
-    let filename = document.local_file?.filename || document.original_filename;
+    const filename = document.local_file?.filename || document.original_filename;
     
     if (!filename) {
       return res.status(404).json({ success: false, error: 'File not found in database' });
     }
 
-    // Find file path
+    // Find file
     const safeFilename = path.basename(filename);
-    const uploadDir = path.join(__dirname, '../uploads/documents/');
-    let filePath = path.join(uploadDir, safeFilename);
+    const possiblePaths = [
+      path.join(__dirname, '../uploads/documents/', safeFilename),
+      path.join(process.cwd(), 'uploads/documents/', safeFilename),
+      document.local_file?.path
+    ];
 
-    console.log('🔍 Looking for file at:', filePath);
-
-    if (!fs.existsSync(filePath)) {
-      // Try alternative paths
-      const altPaths = [
-        path.join(process.cwd(), 'uploads/documents/', safeFilename),
-        path.join(__dirname, '../../uploads/documents/', safeFilename)
-      ];
-      
-      let found = false;
-      for (const altPath of altPaths) {
-        if (fs.existsSync(altPath)) {
-          filePath = altPath;
-          found = true;
-          console.log('✅ Found at alternative path:', filePath);
-          break;
-        }
-      }
-      
-      if (!found) {
-        return res.status(404).json({ success: false, error: 'File not found on server' });
+    let filePath = null;
+    for (const p of possiblePaths) {
+      if (p && fs.existsSync(p)) {
+        filePath = p;
+        break;
       }
     }
 
-    // Get file stats
+    if (!filePath) {
+      return res.status(404).json({ success: false, error: 'File not found on server' });
+    }
+
     const stat = fs.statSync(filePath);
+    const downloadName = document.original_filename || `${document.title}.${document.file_type}`;
 
     // Set headers for download
-    const downloadName = document.original_filename || `${document.title}.${document.file_type}`;
     res.setHeader('Content-Type', document.local_file?.mimetype || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
     res.setHeader('Content-Length', stat.size);
@@ -255,7 +234,7 @@ const downloadDocument = async (req, res) => {
     fileStream.pipe(res);
 
     fileStream.on('error', (error) => {
-      console.error('Error streaming file for download:', error);
+      console.error('Error streaming file:', error);
       if (!res.headersSent) {
         res.status(500).json({ success: false, error: 'Error downloading file' });
       }
@@ -270,6 +249,7 @@ const downloadDocument = async (req, res) => {
 // controllers/documentController.js - FIXED uploadDocumentLocal
 
 // controllers/documentController.js - FIXED uploadDocumentLocal
+// controllers/documentController.js - FIXED UPLOAD FUNCTION
 
 const uploadDocumentLocal = async (req, res) => {
   try {
@@ -295,7 +275,7 @@ const uploadDocumentLocal = async (req, res) => {
       return res.status(404).json({ success: false, error: "Course not found" });
     }
 
-    // First create the document data WITHOUT the URL
+    // Create document data
     const documentData = {
       title: title || req.file.originalname,
       description: description || '',
@@ -316,19 +296,19 @@ const uploadDocumentLocal = async (req, res) => {
       }
     };
 
-    // Add document to course to get the _id
+    // Add document to course
     course.materials.documents.push(documentData);
     await course.save();
 
-    // Get the newly created document with its _id
+    // Get the newly created document
     const newDocument = course.materials.documents[course.materials.documents.length - 1];
 
-    // Generate the URL using the document's _id (NOT the filename)
+    // Generate URLs using document_id
     const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
     const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`;
     const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`;
 
-    // Update the document with the URLs
+    // Update document with URLs
     newDocument.file_url = viewUrl;
     await course.save();
 
@@ -336,7 +316,17 @@ const uploadDocumentLocal = async (req, res) => {
       success: true,
       message: "Document uploaded successfully",
       data: {
-        document: newDocument,
+        document: {
+          _id: newDocument._id,
+          title: newDocument.title,
+          description: newDocument.description,
+          document_type: newDocument.document_type,
+          file_type: newDocument.file_type,
+          file_size: newDocument.file_size,
+          upload_date: newDocument.upload_date,
+          original_filename: newDocument.original_filename,
+          is_public: newDocument.is_public
+        },
         view_url: viewUrl,
         download_url: downloadUrl,
         file_url: viewUrl
