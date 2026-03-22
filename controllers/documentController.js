@@ -251,6 +251,8 @@ const downloadDocument = async (req, res) => {
 // controllers/documentController.js - FIXED uploadDocumentLocal
 // controllers/documentController.js - FIXED UPLOAD FUNCTION
 
+// controllers/documentController.js - FIXED uploadDocumentLocal
+
 const uploadDocumentLocal = async (req, res) => {
   try {
     const { course_id } = req.params;
@@ -275,8 +277,15 @@ const uploadDocumentLocal = async (req, res) => {
       return res.status(404).json({ success: false, error: "Course not found" });
     }
 
-    // Create document data
+    // Generate URLs BEFORE saving
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const documentId = new mongoose.Types.ObjectId(); // Generate ID manually
+    const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${documentId}/view`;
+    const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${documentId}/download`;
+
+    // Create document data with file_url INCLUDED
     const documentData = {
+      _id: documentId, // Set ID explicitly
       title: title || req.file.originalname,
       description: description || '',
       file_type: path.extname(req.file.originalname).substring(1).toLowerCase(),
@@ -286,6 +295,7 @@ const uploadDocumentLocal = async (req, res) => {
       document_type: document_type,
       upload_date: new Date(),
       storage_type: 'local',
+      file_url: viewUrl, // ← Add file_url HERE before saving
       local_file: {
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -298,19 +308,10 @@ const uploadDocumentLocal = async (req, res) => {
 
     // Add document to course
     course.materials.documents.push(documentData);
-    await course.save();
+    await course.save(); // This should now work
 
     // Get the newly created document
-    const newDocument = course.materials.documents[course.materials.documents.length - 1];
-
-    // Generate URLs using document_id
-    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-    const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`;
-    const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`;
-
-    // Update document with URLs
-    newDocument.file_url = viewUrl;
-    await course.save();
+    const newDocument = course.materials.documents.id(documentId);
 
     res.status(201).json({
       success: true,
