@@ -1,4 +1,5 @@
 // controllers/documentController.js - LOCAL STORAGE ONLY VERSION
+const mongoose = require('mongoose');
 const CourseMaterial = require('../models/courseMaterialdata');
 const fs = require('fs');
 const path = require('path');
