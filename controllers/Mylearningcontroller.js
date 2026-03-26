@@ -173,7 +173,7 @@ documents: categoryMaterials.flatMap(course =>
     course_title: course.course_title,
     teacher_name: course.teacher_id?.name || 'Unknown Teacher',
     teacher_qualification: course.teacher_id?.qualification || '',
-    course_id: course._id,
+     course_id: course._id.toString(), // ← ENSURE course_id is set as string
     course_status: course.status
   }))
 ),

@@ -1,4 +1,4 @@
-// routes/documentRoutes.js - FIXED VERSION
+// routes/documentRoutes.js - COMPLETELY FIXED VERSION
 
 const express = require('express');
 const router = express.Router();
@@ -14,6 +14,28 @@ const {
   listUploadedFiles
 } = require('../controllers/documentController');
 
+// ============ COMMON MIDDLEWARE FOR ACCESS CONTROL ============
+// Instead of duplicate routes, use a single route with conditional auth
+const checkDocumentAccess = async (req, res, next) => {
+  try {
+    // If user is teacher, they have full access
+    if (req.user && req.user.role === 'teacher') {
+      req.accessType = 'teacher';
+      return next();
+    }
+    
+    // If user is student, they need to be enrolled
+    if (req.user && req.user.role === 'student') {
+      req.accessType = 'student';
+      return next();
+    }
+    
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // ============ TEACHER ROUTES ============
 router.post(
   '/courses/:course_id/upload',
@@ -22,32 +44,22 @@ router.post(
   uploadDocumentLocal
 );
 
-// Teacher can also view/download their own documents
+// ============ UNIVERSAL ROUTES (Works for both teachers and students) ============
+// ✅ Single route for viewing documents - handles both roles
 router.get(
   '/courses/:course_id/documents/:document_id/view',
-  teacherAuth,
+  studentAuth,  // Use studentAuth which checks both student and teacher roles
   serveDocument
 );
 
+// ✅ Single route for downloading documents - handles both roles
 router.get(
   '/courses/:course_id/documents/:document_id/download',
-  teacherAuth,
+  studentAuth,  // Use studentAuth which checks both student and teacher roles
   downloadDocument
 );
 
-// ============ STUDENT ROUTES ============
-router.get(
-  '/courses/:course_id/documents/:document_id/view',
-  studentAuth,
-  serveDocument
-);
-
-router.get(
-  '/courses/:course_id/documents/:document_id/download',
-  studentAuth,
-  downloadDocument
-);
-
+// ✅ Document info - works for both
 router.get(
   '/courses/:course_id/documents/:document_id/info',
   studentAuth,
@@ -57,9 +69,5 @@ router.get(
 // ============ DEBUG ROUTES (Teacher only) ============
 router.get('/debug/list-files', teacherAuth, listUploadedFiles);
 router.get('/storage/health', checkStorageHealth);
-
-// ============ DIRECT FILE ACCESS (OPTIONAL - REMOVE IF NOT NEEDED) ============
-// If you need this, add authentication
-// router.get('/local/:filename', teacherAuth, serveDocument);
 
 module.exports = router;

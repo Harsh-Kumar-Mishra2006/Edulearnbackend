@@ -1,35 +1,35 @@
+// middlewares/studentauthMiddleware.js
 const jwt = require('jsonwebtoken');
-const Student = require('../models/Mylearningmodel'); // You might need to create this model
 
 const studentAuth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
+      return res.status(401).json({ success: false, error: 'No token provided' });
     }
 
-    // ✅ FIX: Use the SAME secret as auth controller
-    const decoded = jwt.verify(token, 'mypassword');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mypassword');
+    
+    // ✅ FIX: Allow both students AND teachers
+    if (decoded.role !== 'student' && decoded.role !== 'teacher') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Access denied. Student or Teacher privileges required.' 
+      });
+    }
     
     req.user = {
-      userId: decoded.userId,
+      userId: decoded.id || decoded.userId || decoded._id,
       email: decoded.email,
       name: decoded.name,
-      role: decoded.role || 'student'
+      role: decoded.role
     };
-
-    console.log('🟢 Student authenticated:', req.user.email);
+    
     next();
   } catch (error) {
-    console.error('🔴 Student auth error:', error.message);
-    res.status(401).json({
-      success: false,
-      message: 'Invalid token: ' + error.message
-    });
+    console.error('Auth error:', error);
+    res.status(401).json({ success: false, error: 'Invalid token' });
   }
 };
 
