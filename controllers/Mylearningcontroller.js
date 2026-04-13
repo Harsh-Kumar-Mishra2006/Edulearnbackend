@@ -151,7 +151,7 @@ const getMyLearningCourses = async (req, res) => {
               course_title: course.course_title,
               teacher_name: course.teacher_id?.name || 'Unknown Teacher',
               teacher_qualification: course.teacher_id?.qualification || '',
-              course_id: course._id,
+              course_id: course._id.toString(), // ✅ ENSURE this is included
               course_status: course.status // Add course status for debugging
             }))
           ),
@@ -173,7 +173,8 @@ documents: categoryMaterials.flatMap(course =>
     course_title: course.course_title,
     teacher_name: course.teacher_id?.name || 'Unknown Teacher',
     teacher_qualification: course.teacher_id?.qualification || '',
-     course_id: course._id.toString(), // ← ENSURE course_id is set as string
+    course_id: course._id.toString(), // ✅ ENSURE this is included
+    original_filename: doc.original_filename || doc.title, // Add original filename 
     course_status: course.status
   }))
 ),
