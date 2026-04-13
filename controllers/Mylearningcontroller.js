@@ -65,6 +65,7 @@ const getCategoryDisplayName = (category) => {
 };
 
 // Get student's enrolled courses with materials
+// Get student's enrolled courses with materials - FIXED VERSION
 const getMyLearningCourses = async (req, res) => {
   try {
     const student_email = req.user.email;
@@ -79,7 +80,7 @@ const getMyLearningCourses = async (req, res) => {
     });
 
     console.log('🟡 Found enrollments:', enrollments.length);
-    console.log('🟡 Enrollment categories:', enrollments.map(e => e.course_category));
+    console.log('🟡 Enrollment categories (slugs):', enrollments.map(e => e.course_category));
 
     if (enrollments.length === 0) {
       return res.json({
@@ -89,18 +90,41 @@ const getMyLearningCourses = async (req, res) => {
       });
     }
 
-    // Get all course materials for enrolled course categories
-    const enrolledCategories = enrollments.map(e => e.course_category);
-    
-    console.log('🟡 Searching for materials in categories:', enrolledCategories);
+    // 🔥 CRITICAL FIX: Convert slug to display name for database query
+    const slugToDisplayName = (slug) => {
+      const mapping = {
+        'web-development': 'Web Development',
+        'microsoft-office': 'Microsoft Office',
+        'c-programming': 'C Programming',
+        'java': 'Java',
+        'php': 'PHP',
+        'dbms': 'DBMS',
+        'digital-marketing': 'Digital Marketing',
+        'marketing': 'Digital Marketing',
+        'tally': 'Tally',
+        'microsoft-word': 'Microsoft Word',
+        'microsoft-excel': 'Microsoft Excel',
+        'microsoft-powerpoint': 'Microsoft PowerPoint',
+        'python': 'Python',
+        'email-internet': 'Email & Internet',
+        'canva': 'Canva',
+        'design': 'Design',
+        'mobile-dev': 'Mobile Development'
+      };
+      return mapping[slug] || slug;
+    };
 
-    // REMOVE status filter or make it optional
+    // Convert enrollment slugs to display names for query
+    const enrolledDisplayNames = enrollments.map(e => slugToDisplayName(e.course_category));
+    
+    console.log('🟡 Converted to display names for query:', enrolledDisplayNames);
+
+    // Get all course materials using DISPLAY NAMES
     const courseMaterials = await CourseMaterial.find({
-      course_category: { $in: enrolledCategories },
-      // Remove strict status filtering
+      course_category: { $in: enrolledDisplayNames },  // ← NOW using display names!
       $or: [
         { status: 'published' },
-        { status: 'draft' } // Include draft courses too
+        { status: 'draft' }
       ]
     })
     .populate('teacher_id', 'name email qualification')
@@ -108,18 +132,21 @@ const getMyLearningCourses = async (req, res) => {
     .sort({ createdAt: -1 });
 
     console.log('🟡 Found course materials:', courseMaterials.length);
-    console.log('🟡 Course materials statuses:', courseMaterials.map(c => ({ title: c.course_title, status: c.status })));
+    console.log('🟡 Categories found in materials:', [...new Set(courseMaterials.map(c => c.course_category))]);
 
-    // Group materials by course category
-    const learningData = enrolledCategories.map(category => {
-      const categoryMaterials = courseMaterials.filter(course => course.course_category === category);
-      const enrollment = enrollments.find(e => e.course_category === category);
+    // Group materials by enrollment category (keep original slug for frontend)
+    const learningData = enrollments.map(enrollment => {
+      const enrollmentSlug = enrollment.course_category;
+      const displayName = slugToDisplayName(enrollmentSlug);
       
-      console.log(`🟡 Category ${category}: ${categoryMaterials.length} materials`);
+      // Find materials that match the display name
+      const categoryMaterials = courseMaterials.filter(course => course.course_category === displayName);
+      
+      console.log(`🟡 Category ${enrollmentSlug} (${displayName}): ${categoryMaterials.length} courses found`);
 
-      // Calculate total materials count (include all materials regardless of status)
+      // Calculate total materials count
       const totalVideos = categoryMaterials.flatMap(course => 
-        course.materials.videos.filter(v => v.is_public !== false) // Include if not explicitly false
+        course.materials.videos.filter(v => v.is_public !== false)
       ).length;
       
       const totalDocuments = categoryMaterials.flatMap(course => 
@@ -131,8 +158,8 @@ const getMyLearningCourses = async (req, res) => {
       ).length;
 
       return {
-        course_category: category,
-        category_name: getCategoryDisplayName(category),
+        course_category: enrollmentSlug,  // Keep slug for frontend consistency
+        category_name: getCategoryDisplayName(enrollmentSlug),
         enrollment_date: enrollment.enrollment_date,
         progress: enrollment.progress,
         materials: {
@@ -141,9 +168,9 @@ const getMyLearningCourses = async (req, res) => {
               _id: video._id,
               title: video.title,
               description: video.description,
-              video_url: formatCloudinaryUrlForStudent(video.video_url, 'mp4'),
-              public_id: video.public_id, // ADD THIS
-            isAvailable: !!formatCloudinaryUrlForStudent(video.video_url, 'mp4'),
+              video_url: formatCloudinaryUrlForStudent(video.video_url, 'mp4', video.public_id),
+              public_id: video.public_id,
+              isAvailable: !!formatCloudinaryUrlForStudent(video.video_url, 'mp4', video.public_id),
               duration: video.duration,
               file_size: video.file_size,
               is_public: video.is_public,
@@ -151,33 +178,31 @@ const getMyLearningCourses = async (req, res) => {
               course_title: course.course_title,
               teacher_name: course.teacher_id?.name || 'Unknown Teacher',
               teacher_qualification: course.teacher_id?.qualification || '',
-              course_id: course._id.toString(), // ✅ ENSURE this is included
-              course_status: course.status // Add course status for debugging
+              course_id: course._id.toString(),
+              course_status: course.status
             }))
           ),
-          // In Mylearningcontroller.js - Update the document mapping
-
-documents: categoryMaterials.flatMap(course => 
-  course.materials.documents.filter(doc => doc.is_public !== false).map(doc => ({
-    _id: doc._id,
-    title: doc.title,
-    description: doc.description,
-    file_url: doc.file_url, // Use the stored file_url (which points to view endpoint)
-    download_url: `/api/documents/courses/${course._id}/documents/${doc._id}/download`,
-    view_url: doc.file_url,
-    file_type: doc.file_type,
-    file_size: doc.file_size,
-    document_type: doc.document_type,
-    is_public: doc.is_public,
-    upload_date: doc.upload_date,
-    course_title: course.course_title,
-    teacher_name: course.teacher_id?.name || 'Unknown Teacher',
-    teacher_qualification: course.teacher_id?.qualification || '',
-    course_id: course._id.toString(), // ✅ ENSURE this is included
-    original_filename: doc.original_filename || doc.title, // Add original filename 
-    course_status: course.status
-  }))
-),
+          documents: categoryMaterials.flatMap(course => 
+            course.materials.documents.filter(doc => doc.is_public !== false).map(doc => ({
+              _id: doc._id,
+              title: doc.title,
+              description: doc.description,
+              file_url: doc.file_url,
+              download_url: `/api/documents/courses/${course._id}/documents/${doc._id}/download`,
+              view_url: doc.file_url,
+              file_type: doc.file_type,
+              file_size: doc.file_size,
+              document_type: doc.document_type,
+              is_public: doc.is_public,
+              upload_date: doc.upload_date,
+              course_title: course.course_title,
+              teacher_name: course.teacher_id?.name || 'Unknown Teacher',
+              teacher_qualification: course.teacher_id?.qualification || '',
+              course_id: course._id.toString(),
+              original_filename: doc.original_filename || doc.title,
+              course_status: course.status
+            }))
+          ),
           meetings: categoryMaterials.flatMap(course => 
             course.materials.meetings.filter(meeting => meeting.status === 'scheduled').map(meeting => ({
               _id: meeting._id,
