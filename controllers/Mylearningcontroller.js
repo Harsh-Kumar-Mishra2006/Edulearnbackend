@@ -440,11 +440,80 @@ const debugStudentData = async (req, res) => {
     });
   }
 };
+// Add this function to your controller
+const debugLearningData = async (req, res) => {
+  try {
+    const student_email = req.user.email;
+    
+    // Get enrollments
+    const enrollments = await StudentEnrollment.find({ 
+      student_email, 
+      payment_status: 'verified',
+      enrollment_status: 'active'
+    });
+
+    if (enrollments.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No enrollments found',
+        enrollments: []
+      });
+    }
+
+    const enrolledCategories = enrollments.map(e => e.course_category);
+    
+    // Get course materials
+    const courseMaterials = await CourseMaterial.find({
+      course_category: { $in: enrolledCategories }
+    }).populate('teacher_id', 'name email');
+
+    // Detailed debug output
+    const debugInfo = {
+      student_email,
+      enrollments: enrollments.map(e => ({
+        category: e.course_category,
+        status: e.payment_status
+      })),
+      courses_found: courseMaterials.length,
+      courses_detail: courseMaterials.map(course => ({
+        title: course.course_title,
+        category: course.course_category,
+        status: course.status,
+        videos_count: course.materials.videos.length,
+        documents_count: course.materials.documents.length,
+        first_video: course.materials.videos[0] ? {
+          id: course.materials.videos[0]._id,
+          title: course.materials.videos[0].title,
+          has_course_id: !!course._id
+        } : null,
+        first_document: course.materials.documents[0] ? {
+          id: course.materials.documents[0]._id,
+          title: course.materials.documents[0].title,
+          has_course_id: !!course._id
+        } : null
+      }))
+    };
+
+    res.json({
+      success: true,
+      debug: debugInfo
+    });
+
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 
 module.exports = {
   getMyLearningCourses,
   getCategoryMaterials,
   markMaterialCompleted,
   getLearningProgress,
-  debugStudentData
+  debugStudentData,
+  debugLearningData
 };
