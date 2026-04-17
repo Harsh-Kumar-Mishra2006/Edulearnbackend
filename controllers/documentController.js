@@ -307,7 +307,6 @@ const downloadDocument = async (req, res) => {
 // controllers/documentController.js - FIXED UPLOAD FUNCTION
 
 // controllers/documentController.js - FIXED uploadDocumentLocal
-
 const uploadDocumentLocal = async (req, res) => {
   try {
     const { course_id } = req.params;
@@ -331,7 +330,7 @@ const uploadDocumentLocal = async (req, res) => {
       return res.status(404).json({ success: false, error: "Course not found" });
     }
 
-    // Create document WITHOUT generating URLs yet
+    // Create document with a temporary file_url (will be updated after save)
     const documentData = {
       title: title || req.file.originalname,
       description: description || '',
@@ -342,6 +341,7 @@ const uploadDocumentLocal = async (req, res) => {
       document_type: document_type,
       upload_date: new Date(),
       storage_type: 'local',
+      file_url: 'pending', // ← Add this temporarily to pass validation
       local_file: {
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -359,12 +359,12 @@ const uploadDocumentLocal = async (req, res) => {
     // Get the newly created document with its MongoDB _id
     const newDocument = course.materials.documents[course.materials.documents.length - 1];
     
-    // Now generate URLs with the actual document ID
+    // Generate proper URLs with the actual document ID
     const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
     const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`;
     const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`;
     
-    // Update the document with URLs
+    // Update the document with correct URLs
     newDocument.file_url = viewUrl;
     await course.save();
 
