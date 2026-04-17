@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const CourseMaterial = require('../models/courseMaterialdata');
 const fs = require('fs');
 const path = require('path');
-// controllers/documentController.js - ADD THIS HELPER FUNCTION AT THE TOP
 const StudentEnrollment = require('../models/Mylearningmodel'); // Add this require
 
 // Helper function to check enrollment
@@ -160,20 +159,34 @@ const downloadDocument = async (req, res) => {
 
     console.log('📥 Download request:', { course_id, document_id });
 
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(course_id) || !mongoose.Types.ObjectId.isValid(document_id)) {
+      return res.status(400).json({ success: false, error: 'Invalid ID format' });
+    }
+
     const course = await CourseMaterial.findOne({
       _id: course_id,
       'materials.documents._id': document_id
     });
 
     if (!course) {
-      return res.status(404).json({ success: false, error: 'Document not found' });
+      console.log('❌ Course not found:', course_id);
+      return res.status(404).json({ success: false, error: 'Course or document not found' });
     }
 
     const document = course.materials.documents.id(document_id);
     
     if (!document) {
+      console.log('❌ Document not found in course:', document_id);
       return res.status(404).json({ success: false, error: 'Document not found' });
     }
+
+    console.log('📄 Found document:', {
+      title: document.title,
+      filename: document.local_file?.filename,
+      original: document.original_filename,
+      path: document.local_file?.path
+    });
 
     // Check access permissions
     const isTeacher = req.user?.userId && course.teacher_id.toString() === req.user.userId;
@@ -191,38 +204,79 @@ const downloadDocument = async (req, res) => {
     }
     
     if (!isTeacher && !isEnrolled && !document.is_public) {
+      console.log('❌ Access denied');
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
 
-    // Get filename
-    const filename = document.local_file?.filename || document.original_filename;
+    // Get filename - try multiple sources
+    let filename = null;
+    if (document.local_file?.filename) {
+      filename = document.local_file.filename;
+    } else if (document.original_filename) {
+      filename = document.original_filename;
+    } else if (document.title) {
+      filename = document.title;
+    }
     
     if (!filename) {
+      console.log('❌ No filename found in document');
       return res.status(404).json({ success: false, error: 'File not found in database' });
     }
 
-    // Find file
+    // Security: Prevent directory traversal
     const safeFilename = path.basename(filename);
+    
+    // Find the file - expanded search paths
     const possiblePaths = [
       path.join(__dirname, '../uploads/documents/', safeFilename),
+      path.join(__dirname, '../../uploads/documents/', safeFilename),
       path.join(process.cwd(), 'uploads/documents/', safeFilename),
+      path.join(process.cwd(), '../uploads/documents/', safeFilename),
       document.local_file?.path
     ];
+
+    console.log('🔍 Searching for file:', safeFilename);
+    console.log('📁 Possible paths:', possiblePaths);
 
     let filePath = null;
     for (const p of possiblePaths) {
       if (p && fs.existsSync(p)) {
         filePath = p;
+        console.log('✅ Found file at:', p);
         break;
       }
     }
 
     if (!filePath) {
-      return res.status(404).json({ success: false, error: 'File not found on server' });
+      console.error('❌ File not found on server:', safeFilename);
+      
+      // List files in upload directory for debugging
+      const uploadDir = path.join(__dirname, '../uploads/documents/');
+      if (fs.existsSync(uploadDir)) {
+        const files = fs.readdirSync(uploadDir);
+        console.log('📁 Available files in uploads:', files);
+      }
+      
+      return res.status(404).json({ 
+        success: false, 
+        error: 'File not found on server',
+        debug: {
+          filename: safeFilename,
+          uploadDir: path.join(__dirname, '../uploads/documents/'),
+          dirExists: fs.existsSync(path.join(__dirname, '../uploads/documents/'))
+        }
+      });
     }
 
+    // Get file stats
     const stat = fs.statSync(filePath);
     const downloadName = document.original_filename || `${document.title}.${document.file_type}`;
+
+    console.log('📤 Streaming file:', {
+      name: downloadName,
+      size: stat.size,
+      path: filePath
+    });
 
     // Set headers for download
     res.setHeader('Content-Type', document.local_file?.mimetype || 'application/octet-stream');
@@ -235,14 +289,14 @@ const downloadDocument = async (req, res) => {
     fileStream.pipe(res);
 
     fileStream.on('error', (error) => {
-      console.error('Error streaming file:', error);
+      console.error('❌ Error streaming file:', error);
       if (!res.headersSent) {
         res.status(500).json({ success: false, error: 'Error downloading file' });
       }
     });
 
   } catch (error) {
-    console.error('Download error:', error);
+    console.error('❌ Download error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -271,22 +325,14 @@ const uploadDocumentLocal = async (req, res) => {
     });
 
     if (!course) {
-      // Clean up uploaded file
       if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
       return res.status(404).json({ success: false, error: "Course not found" });
     }
 
-    // Generate URLs BEFORE saving
-    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-    const documentId = new mongoose.Types.ObjectId(); // Generate ID manually
-    const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${documentId}/view`;
-    const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${documentId}/download`;
-
-    // Create document data with file_url INCLUDED
+    // Create document WITHOUT generating URLs yet
     const documentData = {
-      _id: documentId, // Set ID explicitly
       title: title || req.file.originalname,
       description: description || '',
       file_type: path.extname(req.file.originalname).substring(1).toLowerCase(),
@@ -296,7 +342,6 @@ const uploadDocumentLocal = async (req, res) => {
       document_type: document_type,
       upload_date: new Date(),
       storage_type: 'local',
-      file_url: viewUrl, // ← Add file_url HERE before saving
       local_file: {
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -309,10 +354,19 @@ const uploadDocumentLocal = async (req, res) => {
 
     // Add document to course
     course.materials.documents.push(documentData);
-    await course.save(); // This should now work
+    await course.save();
 
-    // Get the newly created document
-    const newDocument = course.materials.documents.id(documentId);
+    // Get the newly created document with its MongoDB _id
+    const newDocument = course.materials.documents[course.materials.documents.length - 1];
+    
+    // Now generate URLs with the actual document ID
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const viewUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/view`;
+    const downloadUrl = `${baseUrl}/api/documents/courses/${course_id}/documents/${newDocument._id}/download`;
+    
+    // Update the document with URLs
+    newDocument.file_url = viewUrl;
+    await course.save();
 
     res.status(201).json({
       success: true,
@@ -473,7 +527,58 @@ const listUploadedFiles = async (req, res) => {
   }
 };
 
+// Add this function to documentController.js
+const testFileAccess = async (req, res) => {
+  try {
+    const uploadDir = path.join(__dirname, '../uploads/documents/');
+    const results = {
+      upload_dir_exists: fs.existsSync(uploadDir),
+      upload_dir_path: uploadDir,
+      files: []
+    };
+    
+    if (results.upload_dir_exists) {
+      const files = fs.readdirSync(uploadDir);
+      for (const file of files) {
+        const filePath = path.join(uploadDir, file);
+        const stats = fs.statSync(filePath);
+        results.files.push({
+          name: file,
+          size: stats.size,
+          path: filePath,
+          readable: fs.accessSync(filePath, fs.constants.R_OK) === undefined
+        });
+      }
+    }
+    
+    // Check a specific document if ID provided
+    if (req.params.document_id) {
+      const { course_id, document_id } = req.params;
+      const course = await CourseMaterial.findOne({
+        _id: course_id,
+        'materials.documents._id': document_id
+      });
+      
+      if (course) {
+        const doc = course.materials.documents.id(document_id);
+        results.document_info = {
+          found: true,
+          title: doc.title,
+          filename: doc.local_file?.filename,
+          original_filename: doc.original_filename,
+          file_url: doc.file_url,
+          path_in_db: doc.local_file?.path
+        };
+      }
+    }
+    
+    res.json({ success: true, data: results });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
+// Add to module.exports
 module.exports = {
   checkEnrollment,
   uploadDocumentLocal,
@@ -481,5 +586,6 @@ module.exports = {
   downloadDocument,
   getDocumentInfo,
   checkStorageHealth,
-  listUploadedFiles
+  listUploadedFiles,
+  testFileAccess  // Add this
 };
