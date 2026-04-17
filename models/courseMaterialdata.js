@@ -24,23 +24,42 @@ const courseMaterialSchema = new mongoose.Schema({
   course_category: {
   type: String,
   required: [true, 'Course category is required'],
-  enum: [
-      'Web Development',
-      'Microsoft Office', 
-      'C Programming',
-      'java',
-      'php',
-      'DBMS',
-      'Digital Marketing',
-      'Tally',
-      'Microsoft Word',
-      'Microsoft Excel',
-      'Microsoft PowerPoint',
-      'Python',
-      'Email & Internet',
-      'Canva'
-  ],
-  default: 'other'
+  validate: {
+    validator: function(value) {
+      const allowedCategories = [
+        'Web Development',
+        'Microsoft Office', 
+        'C Programming',
+        'Java',
+        'PHP',
+        'DBMS',
+        'Digital Marketing',
+        'Tally',
+        'Microsoft Word',
+        'Microsoft Excel',
+        'Microsoft PowerPoint',
+        'Python',
+        'Email & Internet',
+        'Canva'
+      ];
+      // Case-insensitive comparison
+      return allowedCategories.some(category => 
+        category.toLowerCase() === value.toLowerCase()
+      );
+    },
+    message: '{VALUE} is not a valid course category'
+  },
+  default: 'other',
+  // Add a setter to normalize the value
+  set: function(value) {
+    const categoryMap = {
+      'java': 'java',
+      'php': 'php',
+      'python': 'Python',
+      // Add other mappings as needed
+    };
+    return categoryMap[value.toLowerCase()] || value;
+  }
 },
   materials: {
     videos: [{
