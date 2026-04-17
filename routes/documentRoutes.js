@@ -49,7 +49,6 @@ router.post(
 router.get(
   '/courses/:course_id/documents/:document_id/view',
   studentAuth,  // Use studentAuth which checks both student and teacher roles
-  teacherAuth,
   serveDocument
 );
 
@@ -57,7 +56,6 @@ router.get(
 router.get(
   '/courses/:course_id/documents/:document_id/download',
   studentAuth,  // Use studentAuth which checks both student and teacher roles
-  teacherAuth,
   downloadDocument
 );
 
