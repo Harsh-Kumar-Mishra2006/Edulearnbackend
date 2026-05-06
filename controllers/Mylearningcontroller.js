@@ -2,7 +2,47 @@ const StudentEnrollment = require('../models/Mylearningmodel');
 const CourseMaterial = require('../models/courseMaterialdata');
 
 // Helper function to get display names for categories
-
+// Add this normalization function (REPLACE the old slugToDisplayName)
+const normalizeCategory = (category) => {
+  if (!category) return '';
+  
+  const mapping = {
+    // Slugs (from enrollments)
+    'web-development': 'Web Development',
+    'microsoft-office': 'Microsoft Office',
+    'c-programming': 'C Programming',
+    'java': 'Java',
+    'php': 'PHP',
+    'dbms': 'DBMS',
+    'digital-marketing': 'Digital Marketing',
+    'tally': 'Tally',
+    'microsoft-word': 'Microsoft Word',
+    'microsoft-excel': 'Microsoft Excel',
+    'microsoft-powerpoint': 'Microsoft PowerPoint',
+    'python': 'Python',
+    'email-internet': 'Email & Internet',
+    'canva': 'Canva',
+    
+    // Already normalized display names (from course materials)
+    'Web Development': 'Web Development',
+    'Microsoft Office': 'Microsoft Office',
+    'C Programming': 'C Programming',
+    'Java': 'Java',
+    'PHP': 'PHP',
+    'DBMS': 'DBMS',
+    'Digital Marketing': 'Digital Marketing',
+    'Tally': 'Tally',
+    'Microsoft Word': 'Microsoft Word',
+    'Microsoft Excel': 'Microsoft Excel',
+    'Microsoft PowerPoint': 'Microsoft PowerPoint',
+    'Python': 'Python',
+    'Email & Internet': 'Email & Internet',
+    'Canva': 'Canva'
+  };
+  
+  const key = category.toString().toLowerCase().trim();
+  return mapping[key] || mapping[category] || category;
+};
 // Add this helper function at the top of Mylearningcontroller.js
 const formatCloudinaryUrlForStudent = (url, fileType, publicId) => {
   console.log('🔗 Formatting URL:', { url, fileType, publicId });
@@ -303,7 +343,7 @@ const getMyLearningCourses = async (req, res) => {
 };
 
     // Convert enrollment slugs to display names for query
-    const enrolledDisplayNames = enrollments.map(e => slugToDisplayName(e.course_category));
+   const enrolledDisplayNames = enrollments.map(e => normalizeCategory(e.course_category));
     
     console.log('🟡 Converted to display names for query:', enrolledDisplayNames);
 
@@ -328,7 +368,9 @@ const getMyLearningCourses = async (req, res) => {
       const displayName = slugToDisplayName(enrollmentSlug);
       
       // Find materials that match the display name
-      const categoryMaterials = courseMaterials.filter(course => course.course_category === displayName);
+      const categoryMaterials = courseMaterials.filter(course => 
+  normalizeCategory(course.course_category) === displayName
+);
       
       console.log(`🟡 Category ${enrollmentSlug} (${displayName}): ${categoryMaterials.length} courses found`);
 
@@ -451,7 +493,8 @@ const getCategoryMaterials = async (req, res) => {
     const student_email = req.user.email;
     
     // Convert slug to display name for query
-    const displayName = slugToDisplayName(category);
+    // REPLACE the displayName line:
+const displayName = normalizeCategory(category);
 
     // Check if student is enrolled in this category
     const enrollment = await StudentEnrollment.findOne({

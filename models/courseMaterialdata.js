@@ -21,44 +21,31 @@ const courseMaterialSchema = new mongoose.Schema({
     type: String,
     maxlength: 1000
   },
-  course_category: {
+  // In courseMaterialdata.js, normalize the course_category on save
+course_category: {
   type: String,
-  required: [true, 'Course category is required'],
-  validate: {
-    validator: function(value) {
-      const allowedCategories = [
-        'Web Development',
-        'Microsoft Office', 
-        'C Programming',
-        'Java',
-        'PHP',
-        'DBMS',
-        'Digital Marketing',
-        'Tally',
-        'Microsoft Word',
-        'Microsoft Excel',
-        'Microsoft PowerPoint',
-        'Python',
-        'Email & Internet',
-        'Canva'
-      ];
-      // Case-insensitive comparison
-      return allowedCategories.some(category => 
-        category.toLowerCase() === value.toLowerCase()
-      );
-    },
-    message: '{VALUE} is not a valid course category'
-  },
-  default: 'other',
-  // Add a setter to normalize the value
+  required: true,
   set: function(value) {
-    const categoryMap = {
-      'java': 'java',
-      'php': 'php',
+    // Normalize category names
+    const normalizedMap = {
+      'java': 'Java',
+      'php': 'PHP', 
       'python': 'Python',
-      // Add other mappings as needed
+      'dbms': 'DBMS',
+      'tally': 'Tally',
+      'canva': 'Canva',
+      'web development': 'Web Development',
+      'c programming': 'C Programming',
+      'digital marketing': 'Digital Marketing',
+      'microsoft office': 'Microsoft Office',
+      'microsoft word': 'Microsoft Word',
+      'microsoft excel': 'Microsoft Excel',
+      'microsoft powerpoint': 'Microsoft PowerPoint',
+      'email & internet': 'Email & Internet'
     };
-    return categoryMap[value.toLowerCase()] || value;
+    
+    const lowerValue = value.toLowerCase().trim();
+    return normalizedMap[lowerValue] || value;
   }
 },
   materials: {
