@@ -194,10 +194,10 @@ const addTeacher = async (req, res) => {
   }
 };
 
-// Get all teachers
+// controllers/adminaddcontroller.js
 const getAllTeachers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', status = '' } = req.query;
+    const { page = 1, limit = 10, search = '', status = '', getAll = 'false' } = req.query;
 
     // Build query
     let query = {};
@@ -214,24 +214,41 @@ const getAllTeachers = async (req, res) => {
       query.status = status;
     }
 
-    const teachers = await Teacher.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .select('-__v');
+    let teachers;
+    let total;
+    let pagination = null;
 
-    const total = await Teacher.countDocuments(query);
+    // If getAll is true, return all teachers without pagination
+    if (getAll === 'true') {
+      teachers = await Teacher.find(query)
+        .sort({ createdAt: -1 })
+        .select('-__v');
+      total = teachers.length;
+    } else {
+      // Paginated response
+      teachers = await Teacher.find(query)
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit))
+        .select('-__v');
+      
+      total = await Teacher.countDocuments(query);
+      
+      pagination = {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        totalTeachers: total,
+        limit: parseInt(limit),
+        hasNext: parseInt(page) * parseInt(limit) < total,
+        hasPrev: parseInt(page) > 1
+      };
+    }
 
     res.json({
       success: true,
       data: teachers,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
-        totalTeachers: total,
-        hasNext: page * limit < total,
-        hasPrev: page > 1
-      }
+      total: total,
+      ...(pagination && { pagination })
     });
 
   } catch (error) {
