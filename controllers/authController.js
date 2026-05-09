@@ -563,6 +563,55 @@ const logout = async (req, res) => {
   }
 };
 
+// Add this to your existing auth controller or create a new student controller
+const getStudentDetails = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    
+    // Fetch from Auth collection
+    const authUser = await Auth.findOne({ email }).select('-password');
+    
+    // Fetch from PersonalInfo collection
+    const personalInfo = await PersonalInfo.findOne({ email });
+    
+    if (!authUser && !personalInfo) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Student not found" 
+      });
+    }
+    
+    // Combine data from both sources
+    const studentDetails = {
+      name: authUser?.name || personalInfo?.name,
+      email: email,
+      phone: authUser?.phone || personalInfo?.phone || '',
+      age: personalInfo?.age || authUser?.profile?.age,
+      gender: personalInfo?.gender || authUser?.profile?.gender,
+      dob: personalInfo?.dob || authUser?.profile?.dob,
+      role: authUser?.role,
+      profile: authUser?.profile,
+      createdAt: authUser?.createdAt,
+      personalInfoUpdated: personalInfo?.updatedAt
+    };
+    
+    console.log('📱 Student phone number:', studentDetails.phone);
+    
+    res.json({
+      success: true,
+      data: studentDetails
+    });
+    
+  } catch (error) {
+    console.error('Error fetching student details:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -570,5 +619,6 @@ module.exports = {
   getProfile,
   debugToken,
   updateProfile,
-  checkTeacherAuthorization
+  checkTeacherAuthorization,
+  getStudentDetails
 };

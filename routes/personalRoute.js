@@ -1,6 +1,12 @@
-const express= require('express');
+// routes/personalInfoRoutes.js
+const express = require('express');
 const router = express.Router();
-const {savePersonalInfo} = require('../controllers/formControllerpersonal');
+const { savePersonalInfo, getPersonalInfoByEmail } = require('../controllers/formControllerpersonal');
 
-router.post('/save', savePersonalInfo);
-module.exports= router;
+// Save/update personal info
+router.post('/save-personal-info', savePersonalInfo);
+
+// Get personal info by email
+router.get('/personal-info/:email', getPersonalInfoByEmail);
+
+module.exports = router;

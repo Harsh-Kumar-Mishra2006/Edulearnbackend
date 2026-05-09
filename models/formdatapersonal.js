@@ -5,7 +5,7 @@ const personalformSchema = new mongoose.Schema({
   age: { type: Number, required: true },
   gender: { type: String, required: true },
   email: { type: String, required: true },
-  phone: { type: String, required: true }, // Changed to String
+  phone: { type: String, required: true, unique: true  }, // Changed to String
   dob: { type: String, required: true }    // Changed to String
 }, {
   timestamps: true,
