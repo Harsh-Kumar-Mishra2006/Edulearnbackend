@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 // Add to authController.js
 const Teacher = require('../models/adminadddata');
+const PersonalInfo = require('../models/formdatapersonal');
 
 // Check if user is authorized teacher
 // Check if user is authorized teacher
