@@ -14,6 +14,10 @@ const paymentSchema = new mongoose.Schema({
     required: true,
     default: 0
   },
+  screenshot_public_id: {
+    type: String, // Store Cloudinary public ID for deletion if needed
+    default: ''
+  },
   payment_method: {
     type: String,
     default: "QR Payment"
@@ -21,6 +25,11 @@ const paymentSchema = new mongoose.Schema({
   screenshot_path: {
     type: String,
     required: true
+  },
+  course_source: {
+    type: String,
+    enum: ['hardcoded', 'database'],
+    default: 'hardcoded'
   },
   status: {
     type: String,

@@ -1,12 +1,10 @@
-// paymentController.js - SIMPLIFIED VERSION
+// paymentController.js - UPDATED with Cloudinary
 const Payment = require('../models/paymentModel');
-const path = require('path');
-const fs = require('fs');
-const multer = require('multer');
 const StudentEnrollment = require('../models/Mylearningmodel');
 const PersonalInfo = require('../models/formdatapersonal');
+const { cloudinary } = require('../config/cloudinary');
 
-// Hardcoded course data ONLY
+// Hardcoded course data (keep as before)
 const courseData = {
   'Web Development': {
     title: "Web Development",
@@ -108,15 +106,12 @@ const courseData = {
   },
 };
 
-// SIMPLIFIED: Check if course exists in hardcoded data
+// Helper function to get course
 const getCourse = (courseTitle) => {
   try {
     console.log('🔍 Checking course:', courseTitle);
-    
-    // Clean the title
     const cleanTitle = String(courseTitle).trim();
     
-    // Check hardcoded courses only
     if (courseData[cleanTitle]) {
       console.log('✅ Found in hardcoded data:', cleanTitle);
       return {
@@ -125,8 +120,20 @@ const getCourse = (courseTitle) => {
       };
     }
     
+    // Case-insensitive match
+    const courseKey = Object.keys(courseData).find(key => 
+      key.toLowerCase() === cleanTitle.toLowerCase()
+    );
+    
+    if (courseKey) {
+      console.log('✅ Case-insensitive match found:', courseKey);
+      return {
+        source: 'hardcoded',
+        data: courseData[courseKey]
+      };
+    }
+    
     console.log('❌ Course not found:', cleanTitle);
-    console.log('📋 Available courses:', Object.keys(courseData));
     return null;
     
   } catch (error) {
@@ -135,13 +142,11 @@ const getCourse = (courseTitle) => {
   }
 };
 
-// SIMPLIFIED: Create enrollment for hardcoded courses only
-// SIMPLIFIED: Create enrollment for hardcoded courses only
-const createStudentEnrollment = async (payment) => {
+// Create student enrollment
+const createStudentEnrollment = async (payment, screenshotUrl) => {
   try {
     console.log('🟡 Creating enrollment for payment:', payment._id);
     
-    // Get course info
     const courseResult = getCourse(payment.course_track);
     
     if (!courseResult) {
@@ -149,21 +154,14 @@ const createStudentEnrollment = async (payment) => {
     }
     
     const course = courseResult.data;
-    
-    // IMPORTANT: Use the EXACT course title from course data, not from payment
-    // Payment.course_track might have case issues, use the standardized version
-    const courseCategory = course.title; // Use "Tally" from course data, not payment.course_track
+    const courseCategory = course.title;
 
-    console.log('🟡 Course category for enrollment:', courseCategory);
-
-    // Get student name from personal info
     const personalInfo = await PersonalInfo.findOne({ email: payment.student_email });
     const studentName = personalInfo ? personalInfo.name : 'Student';
 
-    // Check if enrollment already exists
     const existingEnrollment = await StudentEnrollment.findOne({
       student_email: payment.student_email,
-      course_category: courseCategory, // Use exact course title
+      course_category: courseCategory,
       payment_status: 'verified'
     });
 
@@ -172,11 +170,10 @@ const createStudentEnrollment = async (payment) => {
       return existingEnrollment;
     }
 
-    // Create enrollment data - use exact course title
     const enrollmentData = {
       student_email: payment.student_email,
       student_name: studentName,
-      course_category: courseCategory, // "Tally", "Web Development", etc.
+      course_category: courseCategory,
       payment_status: 'verified',
       payment_id: payment._id,
       enrollment_status: 'active',
@@ -185,12 +182,10 @@ const createStudentEnrollment = async (payment) => {
         last_accessed: new Date()
       },
       course_type: 'hardcoded',
-      course_title: course.title
+      course_title: course.title,
+      screenshot_url: screenshotUrl // Store screenshot URL in enrollment too
     };
 
-    console.log('🟡 Enrollment data:', enrollmentData);
-
-    // Create enrollment
     const enrollment = new StudentEnrollment(enrollmentData);
     await enrollment.save();
     
@@ -199,44 +194,11 @@ const createStudentEnrollment = async (payment) => {
     
   } catch (error) {
     console.error('❌ Error creating student enrollment:', error);
-    
-    // Log specific validation errors
-    if (error.name === 'ValidationError') {
-      console.error('❌ Validation errors:', Object.keys(error.errors));
-      console.error('❌ Full validation error:', error);
-    }
-    
     throw error;
   }
 };
 
-// Multer setup (keep as is)
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/payments/';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: function (req, file, cb) {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  }
-});
-
+// Process payment with Cloudinary
 const processPayment = async (req, res) => {
   console.log('🚀 Payment endpoint called - START');
   console.log('📦 Request body:', req.body);
@@ -250,20 +212,8 @@ const processPayment = async (req, res) => {
     console.log('  - course_track:', course_track);
     console.log('  - amount:', amount);
     
-    // Debug: Show exact course_track
-    console.log('🔍 DETAILED COURSE CHECK:');
-    console.log('  - Raw course_track:', `"${course_track}"`);
-    console.log('  - Length:', course_track.length);
-    
-    // Show all available courses
-    console.log('📋 AVAILABLE COURSES IN courseData:');
-    Object.keys(courseData).forEach((key, i) => {
-      console.log(`  ${i+1}. "${key}" (price: ₹${courseData[key].price})`);
-    });
-    
-    // Quick validation
+    // Validation
     if (!student_email) {
-      console.log('❌ Missing student_email');
       return res.status(400).json({ 
         success: false,
         error: "Student email is required" 
@@ -271,7 +221,6 @@ const processPayment = async (req, res) => {
     }
     
     if (!course_track) {
-      console.log('❌ Missing course_track');
       return res.status(400).json({ 
         success: false,
         error: "Course track is required" 
@@ -279,70 +228,43 @@ const processPayment = async (req, res) => {
     }
     
     if (!req.file) {
-      console.log('❌ Missing screenshot file');
       return res.status(400).json({ 
         success: false,
         error: "Payment screenshot is required" 
       });
     }
     
-    // Clean the course title
-    const normalizedCourseTrack = String(course_track).trim();
-    console.log(`🔄 Normalized course: "${normalizedCourseTrack}"`);
+    // Get course details
+    const courseResult = getCourse(course_track);
     
-    // Check if course exists with multiple methods
-    let foundCourse = null;
-    let foundKey = null;
-    
-    // Method 1: Exact match
-    if (courseData[normalizedCourseTrack]) {
-      foundCourse = courseData[normalizedCourseTrack];
-      foundKey = normalizedCourseTrack;
-      console.log(`✅ Exact match found: "${foundKey}"`);
-    } 
-    // Method 2: Case-insensitive match
-    else {
-      const courseKey = Object.keys(courseData).find(key => 
-        key.toLowerCase() === normalizedCourseTrack.toLowerCase()
-      );
-      
-      if (courseKey) {
-        foundCourse = courseData[courseKey];
-        foundKey = courseKey;
-        console.log(`✅ Case-insensitive match found: "${foundKey}" (was looking for: "${normalizedCourseTrack}")`);
-      }
-    }
-    
-    // Check if course was found
-    if (!foundCourse) {
-      console.log(`❌ Course not found: "${normalizedCourseTrack}"`);
-      console.log('📋 Available courses:', Object.keys(courseData));
-      
+    if (!courseResult) {
       return res.status(400).json({ 
         success: false,
-        error: `Course "${normalizedCourseTrack}" not found. Please check the course name.`,
-        availableCourses: Object.keys(courseData),
-        debug: {
-          received: normalizedCourseTrack,
-          available: Object.keys(courseData),
-          suggestion: "Check for typos or case differences"
-        }
+        error: `Course "${course_track}" not found`,
+        availableCourses: Object.keys(courseData)
       });
     }
 
-    // ✅ NOW it's safe to log - foundCourse is guaranteed to be defined here
-    console.log('✅ Course found:', foundCourse);
-    console.log('✅ Course title from data:', foundCourse.title);
-    console.log('✅ Course category from data:', foundCourse.category);
-    console.log('✅ Using as enrollment category:', foundKey);
+    const course = courseResult.data;
+    const foundKey = Object.keys(courseData).find(key => 
+      key.toLowerCase() === String(course_track).trim().toLowerCase()
+    ) || course_track;
 
-    // 3. Create payment record
+    // ✅ File is already uploaded to Cloudinary by multer-storage-cloudinary
+    // The file URL is available in req.file.path
+    const screenshotUrl = req.file.path;
+    const screenshotPublicId = req.file.filename;
+
+    console.log('✅ Screenshot uploaded to Cloudinary:', screenshotUrl);
+
+    // Create payment record with Cloudinary URL
     const payment = new Payment({
       student_email: student_email,
       course_track: foundKey,
-      amount: foundCourse.price,
-      screenshot_path: req.file.path,
-      status: 'verified',
+      amount: course.price,
+      screenshot_path: screenshotUrl, // Cloudinary URL
+      screenshot_public_id: screenshotPublicId,
+      status: 'pending',
       course_source: 'hardcoded'
     });
 
@@ -350,25 +272,23 @@ const processPayment = async (req, res) => {
     await payment.save();
     console.log('✅ Payment saved:', payment._id);
 
-    // 4. Create enrollment
+    // Create enrollment
     try {
-      const enrollment = await createStudentEnrollment(payment);
+      const enrollment = await createStudentEnrollment(payment, screenshotUrl);
       
-      console.log('✅ Enrollment created:', enrollment._id);
-      
-      // Success response
       return res.json({
         success: true,
-        message: `Payment successful! You are now enrolled in ${foundCourse.title}`,
+        message: `Payment recorded! You are now enrolled in ${course.title}`,
         course: {
-          title: foundCourse.title,
-          price: foundCourse.price,
-          duration: foundCourse.duration,
-          level: foundCourse.level,
-          category: foundCourse.category
+          title: course.title,
+          price: course.price,
+          duration: course.duration,
+          level: course.level,
+          category: course.category
         },
         payment_id: payment._id,
         enrollment_id: enrollment._id,
+        screenshot_url: screenshotUrl,
         enrollment_date: new Date(),
         status: 'enrolled'
       });
@@ -376,11 +296,11 @@ const processPayment = async (req, res) => {
     } catch (enrollmentError) {
       console.log('⚠️ Enrollment failed:', enrollmentError.message);
       
-      // Payment succeeded even if enrollment failed
       return res.json({
         success: true,
-        message: "Payment successful! Please contact admin for enrollment confirmation.",
+        message: "Payment recorded! Please contact admin for enrollment confirmation.",
         payment_id: payment._id,
+        screenshot_url: screenshotUrl,
         warning: "Enrollment pending"
       });
     }
@@ -395,14 +315,6 @@ const processPayment = async (req, res) => {
       });
     }
     
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({ 
-        success: false,
-        error: "Validation error: " + errors.join(', ')
-      });
-    }
-    
     res.status(500).json({ 
       success: false,
       error: "Error processing payment: " + error.message 
@@ -410,11 +322,9 @@ const processPayment = async (req, res) => {
   }
 };
 
-// SIMPLIFIED: Get available courses
+// Get available courses
 const getAvailableCourses = async (req, res) => {
   try {
-    console.log('🟡 Fetching hardcoded courses...');
-    
     const hardcodedCourses = Object.values(courseData).map(course => ({
       title: course.title,
       price: course.price,
@@ -423,8 +333,6 @@ const getAvailableCourses = async (req, res) => {
       level: course.level,
       source: 'hardcoded'
     }));
-    
-    console.log(`✅ Found ${hardcodedCourses.length} hardcoded courses`);
     
     res.json({
       success: true,
@@ -442,7 +350,6 @@ const getAvailableCourses = async (req, res) => {
   }
 };
 
-// Keep other functions simple
 const getPaymentStatus = async (req, res) => {
   try {
     const { student_email } = req.params;
@@ -502,13 +409,9 @@ const verifyPayment = async (req, res) => {
   }
 };
 
-// REMOVE database-related functions
-// Remove: getCourseDetails, database searching, Course model imports
-
 module.exports = {
   processPayment,
   getPaymentStatus,
-  upload,
   verifyPayment,
   getAvailableCourses,
   createStudentEnrollment

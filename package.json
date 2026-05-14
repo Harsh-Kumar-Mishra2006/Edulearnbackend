@@ -8,8 +8,8 @@
     "dev": "nodemon App.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:cloudinary": "node testCloudinary.js",
-  "test:api": "TEST_TEACHER_TOKEN=your_jwt_token_here node testAPI.js",
-  "test:all": "npm run test:cloudinary && npm run test:api"
+    "test:api": "TEST_TEACHER_TOKEN=your_jwt_token_here node testAPI.js",
+    "test:all": "npm run test:cloudinary && npm run test:api"
   },
   "keywords": [],
   "author": "",
