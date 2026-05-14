@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { storage } = require('./config/Cloudinary');
+const multer = require('multer');
+
 
 // Import routes
 const personalRoutes = require('./routes/personalRoute');
@@ -144,6 +147,19 @@ app.use(cors(corsOptions));
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 // Add these debug routes to app.js
 app.get('/api/debug/auth-check', async (req, res) => {

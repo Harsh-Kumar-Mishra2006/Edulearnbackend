@@ -3,6 +3,9 @@ const Payment = require('../models/paymentModel');
 const StudentEnrollment = require('../models/Mylearningmodel');
 const PersonalInfo = require('../models/formdatapersonal');
 const { cloudinary } = require('../config/cloudinary');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 // Hardcoded course data (keep as before)
 const courseData = {
@@ -409,10 +412,38 @@ const verifyPayment = async (req, res) => {
   }
 };
 
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = 'uploads/payments/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+
 module.exports = {
   processPayment,
   getPaymentStatus,
   verifyPayment,
+  upload,
   getAvailableCourses,
   createStudentEnrollment
 };
