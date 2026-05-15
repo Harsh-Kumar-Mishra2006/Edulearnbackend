@@ -2,10 +2,6 @@
 const Payment = require('../models/paymentModel');
 const StudentEnrollment = require('../models/Mylearningmodel');
 const PersonalInfo = require('../models/formdatapersonal');
-const { cloudinary } = require('../config/cloudinary');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
 // Hardcoded course data (keep as before)
 const courseData = {
@@ -372,7 +368,6 @@ const verifyPayment = async (req, res) => {
     });
   }
 };
-
 
 
 module.exports = {
