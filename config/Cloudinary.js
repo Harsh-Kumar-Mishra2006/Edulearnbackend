@@ -1,5 +1,6 @@
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer = require('multer');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -18,12 +19,16 @@ const storage = new CloudinaryStorage({
     public_id: (req, file) => {
       const timestamp = Date.now();
       const random = Math.round(Math.random() * 1E9);
-      return `payment_${req.body.student_email}_${timestamp}_${random}`;
+      const email = req.body.student_email || 'unknown';
+      return `payment_${email}_${timestamp}_${random}`;
     }
   }
 });
 
-module.exports = {
-  cloudinary,
-  storage
-};
+// ✅ Create multer instance
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+module.exports = upload; // Export just the upload middleware

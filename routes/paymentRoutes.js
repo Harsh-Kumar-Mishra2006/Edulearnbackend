@@ -4,11 +4,10 @@ const router = express.Router();
 const { 
   processPayment, 
   getPaymentStatus, 
-  upload,
   verifyPayment,
   getAvailableCourses
 } = require('../controllers/paymentController');
-
+const upload = require('../config/Cloudinary')
 // Process payment with screenshot upload
 router.post('/process', upload.single('screenshot'), processPayment);
 

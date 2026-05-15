@@ -1,4 +1,4 @@
-// controllers/teacherController.js
+// controllers/adminController.js
 const Payment = require('../models/paymentModel');
 
 // Get all student payment records
@@ -8,9 +8,15 @@ const getStudentRecords = async (req, res) => {
       .sort({ createdAt: -1 })
       .select('-__v');
 
+    // Add full screenshot URL for each payment
+    const paymentsWithUrls = payments.map(payment => ({
+      ...payment.toObject(),
+      screenshot_url: payment.screenshot_path // Cloudinary URL
+    }));
+
     res.json({
       success: true,
-      payments,
+      payments: paymentsWithUrls,
       total: payments.length
     });
 

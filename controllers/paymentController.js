@@ -201,7 +201,7 @@ const createStudentEnrollment = async (payment, screenshotUrl) => {
   }
 };
 
-// Process payment with Cloudinary
+// paymentController.js - Update the processPayment function
 const processPayment = async (req, res) => {
   console.log('🚀 Payment endpoint called - START');
   console.log('📦 Request body:', req.body);
@@ -209,11 +209,6 @@ const processPayment = async (req, res) => {
 
   try {
     const { student_email, course_track, amount } = req.body;
-    
-    console.log('🔍 Parsed fields:');
-    console.log('  - student_email:', student_email);
-    console.log('  - course_track:', course_track);
-    console.log('  - amount:', amount);
     
     // Validation
     if (!student_email) {
@@ -236,88 +231,54 @@ const processPayment = async (req, res) => {
         error: "Payment screenshot is required" 
       });
     }
-    
-    // Get course details
+
+    // ✅ Get the Cloudinary URL from req.file
+    const screenshotUrl = req.file.path; // Cloudinary URL
+    const screenshotPublicId = req.file.filename; // Cloudinary public ID
+
+    console.log('✅ Screenshot uploaded to Cloudinary:', screenshotUrl);
+    console.log('✅ Public ID:', screenshotPublicId);
+
+    // Get course details (your existing logic)
     const courseResult = getCourse(course_track);
     
     if (!courseResult) {
       return res.status(400).json({ 
         success: false,
-        error: `Course "${course_track}" not found`,
-        availableCourses: Object.keys(courseData)
+        error: `Course "${course_track}" not found`
       });
     }
 
     const course = courseResult.data;
-    const foundKey = Object.keys(courseData).find(key => 
-      key.toLowerCase() === String(course_track).trim().toLowerCase()
-    ) || course_track;
-
-    // ✅ File is already uploaded to Cloudinary by multer-storage-cloudinary
-    // The file URL is available in req.file.path
-    const screenshotUrl = req.file.path;
-    const screenshotPublicId = req.file.filename;
-
-    console.log('✅ Screenshot uploaded to Cloudinary:', screenshotUrl);
 
     // Create payment record with Cloudinary URL
     const payment = new Payment({
       student_email: student_email,
-      course_track: foundKey,
+      course_track: course_track,
       amount: course.price,
-      screenshot_path: screenshotUrl, // Cloudinary URL
+      screenshot_path: screenshotUrl, // Store Cloudinary URL
       screenshot_public_id: screenshotPublicId,
       status: 'pending',
       course_source: 'hardcoded'
     });
 
-    console.log('🟡 Saving payment to database...');
     await payment.save();
     console.log('✅ Payment saved:', payment._id);
 
-    // Create enrollment
-    try {
-      const enrollment = await createStudentEnrollment(payment, screenshotUrl);
-      
-      return res.json({
-        success: true,
-        message: `Payment recorded! You are now enrolled in ${course.title}`,
-        course: {
-          title: course.title,
-          price: course.price,
-          duration: course.duration,
-          level: course.level,
-          category: course.category
-        },
-        payment_id: payment._id,
-        enrollment_id: enrollment._id,
-        screenshot_url: screenshotUrl,
-        enrollment_date: new Date(),
-        status: 'enrolled'
-      });
+    // Create enrollment (your existing logic)
+    const enrollment = await createStudentEnrollment(payment, screenshotUrl);
 
-    } catch (enrollmentError) {
-      console.log('⚠️ Enrollment failed:', enrollmentError.message);
-      
-      return res.json({
-        success: true,
-        message: "Payment recorded! Please contact admin for enrollment confirmation.",
-        payment_id: payment._id,
-        screenshot_url: screenshotUrl,
-        warning: "Enrollment pending"
-      });
-    }
+    res.json({
+      success: true,
+      message: `Payment recorded! You are now enrolled in ${course.title}`,
+      payment_id: payment._id,
+      enrollment_id: enrollment._id,
+      screenshot_url: screenshotUrl,
+      enrollment_date: new Date()
+    });
 
   } catch (error) {
     console.error('❌ Payment processing error:', error);
-    
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false,
-        error: "Duplicate payment detected" 
-      });
-    }
-    
     res.status(500).json({ 
       success: false,
       error: "Error processing payment: " + error.message 
@@ -412,38 +373,12 @@ const verifyPayment = async (req, res) => {
   }
 };
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/payments/';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: function (req, file, cb) {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  }
-});
 
 
 module.exports = {
   processPayment,
   getPaymentStatus,
   verifyPayment,
-  upload,
   getAvailableCourses,
   createStudentEnrollment
 };
