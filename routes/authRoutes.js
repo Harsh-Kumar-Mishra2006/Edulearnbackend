@@ -1,7 +1,7 @@
 // authRoutes.js
 const express = require('express');
 const { login, signup, logout, getProfile, updateProfile, checkTeacherAuthorization,debugToken,
-  getStudentDetails
+  getStudentDetails, getCombinedStudentProfile
  } = require('../controllers/authController');
 const authenticateToken = require('../middlewares/authMiddleware'); // Add this
 const router = express.Router();
@@ -17,7 +17,7 @@ router.get('/debug-token', debugToken);
 router.put('/profile', authenticateToken, updateProfile);
 router.get('/check-teacher', authenticateToken, checkTeacherAuthorization); // Also protect this
 router.get('/student-details/:email', authenticateToken, getStudentDetails);
-
+router.get('/student-profile/:email', authenticateToken, getCombinedStudentProfile);
 // Debug route (optional, can be public or protected)
 router.get('/debug-auth', async (req, res) => {
   try {
