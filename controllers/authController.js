@@ -116,12 +116,10 @@ const checkTeacherAuthorization = async (req, res) => {
   }
 };
 
-// Update signup controller to save profile data
 const signup = async (req, res) => {
-  let { name, email, username, phone, password, role = 'student', profile = {} } = req.body;
+  let { name, email, username, phone, password, role = 'student', profile = {}, age, gender, dob } = req.body;
 
-  // Extract additional profile fields
-  const { age, gender, dob } = req.body;
+  console.log('📝 Signup request received with:', { name, email, username, phone, role, age, gender, dob });
 
   if (!name || !email || !password || !username || !phone) {
     return res.status(400).json({ 
@@ -152,17 +150,23 @@ const signup = async (req, res) => {
       });
     }
 
-    // Hash password and create user
+    // Hash password
     const salt = await bcryptjs.genSalt(10);
     const hash = await bcryptjs.hash(password, salt);
     
-    // Prepare profile data for students
-    const studentProfile = role === 'student' ? {
-      ...profile,
-      age: age || '',
-      gender: gender || '',
-      dob: dob || ''
-    } : profile;
+    // ✅ FIXED: Properly prepare profile data for students
+    let studentProfile = { ...profile };
+    
+    if (role === 'student') {
+      studentProfile = {
+        age: age || '',
+        gender: gender || '',
+        dob: dob || '',
+        ...profile  // Include any additional profile fields
+      };
+    }
+    
+    console.log('📦 Saving profile data:', studentProfile);
     
     const createuser = await auth.create({ 
       name,
@@ -172,6 +176,13 @@ const signup = async (req, res) => {
       password: hash,
       role,
       profile: studentProfile
+    });
+
+    console.log('✅ User created successfully with profile:', {
+      id: createuser._id,
+      name: createuser.name,
+      email: createuser.email,
+      profile: createuser.profile
     });
 
     res.status(201).json({
@@ -662,6 +673,65 @@ const getCombinedStudentProfile = async (req, res) => {
   }
 };
 
+const updateStudentProfile = async (req, res) => {
+  try {
+    const { email, age, gender, dob, phone, name } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+    
+    const user = await auth.findOne({ email });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    // Initialize profile if it doesn't exist
+    if (!user.profile) user.profile = {};
+    
+    // Update fields
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (age !== undefined) user.profile.age = age;
+    if (gender) user.profile.gender = gender;
+    if (dob) user.profile.dob = dob;
+    
+    await user.save();
+    
+    console.log(`✅ Updated profile for ${email}:`, {
+      age: user.profile.age,
+      gender: user.profile.gender,
+      dob: user.profile.dob
+    });
+    
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        profile: user.profile
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating student profile:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -671,5 +741,6 @@ module.exports = {
   updateProfile,
   checkTeacherAuthorization,
   getStudentDetails,
-  getCombinedStudentProfile
+  getCombinedStudentProfile,
+  updateStudentProfile
 };
