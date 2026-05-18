@@ -732,6 +732,65 @@ const updateStudentProfile = async (req, res) => {
   }
 };
 
+// Add this to authController.js
+const getStudentProfileData = async (req, res) => {
+  try {
+    // Get token from header
+    let token = req.header('Authorization') || req.headers.authorization;
+    
+    if (token) {
+      token = token.replace('Bearer ', '');
+    } else {
+      token = req.cookies?.token;
+    }
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'No token provided'
+      });
+    }
+    
+    const decoded = jwt.verify(token, 'mypassword');
+    const user = await auth.findById(decoded.userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    // Check PersonalInfo collection
+    const personalInfo = await PersonalInfo.findOne({ email: user.email });
+    
+    // Prepare response data with priority: PersonalInfo > Auth Profile > Defaults
+    const profileData = {
+      name: personalInfo?.name || user.name || '',
+      email: user.email,
+      phone: personalInfo?.phone || user.phone || '',
+      age: personalInfo?.age || user.profile?.age || '',
+      gender: personalInfo?.gender || user.profile?.gender || '',
+      dob: personalInfo?.dob || user.profile?.dob || '',
+      hasPersonalInfo: !!personalInfo
+    };
+    
+    console.log('📤 Sending profile data:', profileData);
+    
+    res.json({
+      success: true,
+      data: profileData
+    });
+    
+  } catch (error) {
+    console.error('Error in getStudentProfileData:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -742,5 +801,6 @@ module.exports = {
   checkTeacherAuthorization,
   getStudentDetails,
   getCombinedStudentProfile,
-  updateStudentProfile
+  updateStudentProfile,
+  getStudentProfileData
 };
