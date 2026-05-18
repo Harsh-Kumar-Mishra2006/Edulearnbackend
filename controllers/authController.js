@@ -613,6 +613,55 @@ const getStudentDetails = async (req, res) => {
   }
 };
 
+// Add this function to authController.js
+const getCombinedStudentProfile = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Email is required" 
+      });
+    }
+    
+    console.log('🔍 Fetching combined profile for email:', email);
+    
+    // Get data from Auth collection
+    const authUser = await Auth.findOne({ email }).select('-password');
+    
+    // Get data from PersonalInfo collection
+    const personalInfo = await PersonalInfo.findOne({ email });
+    
+    // Combine data with priority: PersonalInfo > Auth > Defaults
+    const combinedData = {
+      name: personalInfo?.name || authUser?.name || '',
+      email: email,
+      phone: personalInfo?.phone || authUser?.phone || '',
+      age: personalInfo?.age || authUser?.profile?.age || '',
+      gender: personalInfo?.gender || authUser?.profile?.gender || '',
+      dob: personalInfo?.dob || authUser?.profile?.dob || '',
+      role: authUser?.role || 'student',
+      hasPersonalInfo: !!personalInfo,
+      hasAuthProfile: !!authUser
+    };
+    
+    console.log('✅ Combined profile data:', combinedData);
+    
+    res.json({
+      success: true,
+      data: combinedData
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching combined profile:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -621,5 +670,6 @@ module.exports = {
   debugToken,
   updateProfile,
   checkTeacherAuthorization,
-  getStudentDetails
+  getStudentDetails,
+  getCombinedStudentProfile
 };
