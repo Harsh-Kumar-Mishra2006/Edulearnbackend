@@ -3,6 +3,7 @@ const QuizAttempt = require('../models/quizAttemptModel');
 const CourseMaterial = require('../models/courseMaterialdata');
 // Get student's enrolled courses
 const StudentEnrollment = require('../models/Mylearningmodel');
+
 // Create new quiz
 const createQuiz = async (req, res) => {
   try {
@@ -233,7 +234,7 @@ const updateQuizSettings = async (req, res) => {
   }
 };
 
-// Get quiz attempts for a quiz
+// Get quiz attempts for a quiz (Teacher view)
 const getQuizAttempts = async (req, res) => {
   try {
     const { quiz_id } = req.params;
@@ -286,7 +287,7 @@ const getQuizAttempts = async (req, res) => {
   }
 };
 
-// Get student's available quizzes - DEBUG VERSION
+// Get student's available quizzes
 const getStudentQuizzes = async (req, res) => {
   try {
     const student_email = req.user.email;
@@ -300,12 +301,6 @@ const getStudentQuizzes = async (req, res) => {
     });
 
     console.log('🟡 [DEBUG] Student enrollments found:', enrollments.length);
-    console.log('🟡 [DEBUG] Enrollment details:', JSON.stringify(enrollments.map(e => ({
-      course_title: e.course_title,
-      course_category: e.course_category,
-      payment_status: e.payment_status,
-      enrollment_status: e.enrollment_status
-    })), null, 2));
 
     if (enrollments.length === 0) {
       console.log('🔴 [DEBUG] No active enrollments found for student');
@@ -319,43 +314,19 @@ const getStudentQuizzes = async (req, res) => {
     const enrolledCategories = enrollments.map(e => e.course_category);
     console.log('🟡 [DEBUG] Enrolled categories:', enrolledCategories);
 
-    // Get ALL quizzes first to see what exists
-    const allQuizzes = await Question.find({})
-      .populate('teacher_id', 'name')
-      .sort({ createdAt: -1 });
-
-    console.log('🟡 [DEBUG] ALL quizzes in database:', allQuizzes.length);
-    console.log('🟡 [DEBUG] All quiz details:', JSON.stringify(allQuizzes.map(q => ({
-      quiz_title: q.quiz_title,
-      course_category: q.course_category,
-      status: q.status,
-      is_active: q.quiz_settings?.is_active,
-      course_title: q.course_title
-    })), null, 2));
-
-    // Now get quizzes for enrolled categories
+    // Get quizzes for enrolled categories
     const quizzes = await Question.find({
       course_category: { $in: enrolledCategories },
-      //status: 'published',
       'quiz_settings.is_active': true
     })
     .populate('teacher_id', 'name')
     .sort({ createdAt: -1 });
 
-    console.log('🟡 [DEBUG] Filtered quizzes found:', quizzes.length);
-    console.log('🟡 [DEBUG] Filtered quiz details:', JSON.stringify(quizzes.map(q => ({
-      quiz_title: q.quiz_title,
-      course_category: q.course_category,
-      status: q.status
-    })), null, 2));
-
-    const availableQuizzes = quizzes;   // ← YES, JUST THIS LINE
-    console.log('🟡 [DEBUG] Available quizzes after date filter:', availableQuizzes.length);
-    console.log(`✅ [DEBUG] Final result: Found ${availableQuizzes.length} quizzes for student ${student_email}`);
+    console.log(`✅ [DEBUG] Found ${quizzes.length} quizzes for student ${student_email}`);
     
     res.json({
       success: true,
-      data: availableQuizzes
+      data: quizzes
     });
 
   } catch (error) {
@@ -366,6 +337,7 @@ const getStudentQuizzes = async (req, res) => {
     });
   }
 };
+
 // Start quiz attempt
 const startQuizAttempt = async (req, res) => {
   try {
@@ -374,7 +346,6 @@ const startQuizAttempt = async (req, res) => {
     // Get quiz details
     const quiz = await Question.findOne({
       _id: quiz_id,
-      //status: 'published',
       'quiz_settings.is_active': true
     });
 
@@ -396,13 +367,16 @@ const startQuizAttempt = async (req, res) => {
     // Check previous attempts
     const previousAttempts = await QuizAttempt.find({
       quiz_id,
-      student_id: req.user.userId
+      student_id: req.user.userId,
+      status: 'submitted'
     });
 
-    if (previousAttempts.length >= quiz.quiz_settings.max_attempts) {
+    const maxAttempts = quiz.quiz_settings.max_attempts || 1;
+    
+    if (previousAttempts.length >= maxAttempts) {
       return res.status(400).json({
         success: false,
-        error: `Maximum attempts (${quiz.quiz_settings.max_attempts}) reached for this quiz`
+        error: `Maximum attempts (${maxAttempts}) reached for this quiz`
       });
     }
 
@@ -446,7 +420,6 @@ const startQuizAttempt = async (req, res) => {
         question_text: q.question_text,
         options: q.options,
         points: q.points
-        // Don't send correct_option or explanation
       }))
     };
 
@@ -468,107 +441,7 @@ const startQuizAttempt = async (req, res) => {
   }
 };
 
-// Submit quiz attempt
-const submitQuizAttempt = async (req, res) => {
-  try {
-    const { attempt_id } = req.params;
-    const { answers, time_taken } = req.body;
-
-    const attempt = await QuizAttempt.findOne({
-      _id: attempt_id,
-      student_id: req.user.userId,
-      status: 'in_progress'
-    });
-
-    if (!attempt) {
-      return res.status(404).json({
-        success: false,
-        error: "Attempt not found or already submitted"
-      });
-    }
-
-    // Get quiz to check correct answers
-    const quiz = await Question.findById(attempt.quiz_id);
-    if (!quiz) {
-      return res.status(404).json({
-        success: false,
-        error: "Quiz not found"
-      });
-    }
-
-    // Validate and grade answers
-    const gradedAnswers = answers.map(answer => {
-      const question = quiz.questions.find(q => q.question_number === answer.question_number);
-      if (!question) return answer;
-
-      const is_correct = answer.selected_option === question.correct_option;
-      const points_earned = is_correct ? question.points : 0;
-
-      return {
-        ...answer,
-        is_correct,
-        points_earned
-      };
-    });
-
-    // Update attempt
-    attempt.answers = gradedAnswers;
-    attempt.time_taken = time_taken;
-    attempt.submitted_at = new Date();
-    attempt.status = 'submitted';
-
-    await attempt.save();
-
-    // Update quiz analytics
-    await updateQuizAnalytics(quiz._id);
-
-    // Return results
-    const results = {
-      score: attempt.score,
-      correct_answers: quiz.questions.map(q => ({
-        question_number: q.question_number,
-        correct_option: q.correct_option,
-        explanation: q.explanation
-      }))
-    };
-
-    res.json({
-      success: true,
-      message: "Quiz submitted successfully",
-      data: results
-    });
-
-  } catch (error) {
-    console.error('Submit quiz attempt error:', error);
-    res.status(500).json({
-      success: false,
-      error: "Error submitting quiz attempt: " + error.message
-    });
-  }
-};
-
-// Helper function to update quiz analytics
-const updateQuizAnalytics = async (quizId) => {
-  try {
-    const attempts = await QuizAttempt.find({ 
-      quiz_id: quizId, 
-      status: 'submitted' 
-    });
-
-    const analytics = {
-      total_attempts: attempts.length,
-      average_score: attempts.reduce((sum, attempt) => sum + attempt.score.percentage, 0) / attempts.length || 0,
-      highest_score: Math.max(...attempts.map(attempt => attempt.score.percentage), 0),
-      lowest_score: Math.min(...attempts.map(attempt => attempt.score.percentage), 0)
-    };
-
-    await Question.findByIdAndUpdate(quizId, { analytics });
-
-  } catch (error) {
-    console.error('Update quiz analytics error:', error);
-  }
-};
-// GET quiz attempt details for student (THIS WAS MISSING!)
+// GET quiz attempt details for student (in progress)
 const getQuizAttempt = async (req, res) => {
   try {
     const { attempt_id } = req.params;
@@ -623,6 +496,202 @@ const getQuizAttempt = async (req, res) => {
   }
 };
 
+// Submit quiz attempt (UPDATED with detailed results)
+const submitQuizAttempt = async (req, res) => {
+  try {
+    const { attempt_id } = req.params;
+    const { answers, time_taken } = req.body;
+
+    const attempt = await QuizAttempt.findOne({
+      _id: attempt_id,
+      student_id: req.user.userId,
+      status: 'in_progress'
+    });
+
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        error: "Attempt not found or already submitted"
+      });
+    }
+
+    // Get quiz to check correct answers
+    const quiz = await Question.findById(attempt.quiz_id);
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        error: "Quiz not found"
+      });
+    }
+
+    // Validate and grade answers
+    const gradedAnswers = [];
+    let totalEarnedPoints = 0;
+    let totalPossiblePoints = 0;
+    let correctCount = 0;
+
+    for (const answer of answers) {
+      const question = quiz.questions.find(q => q.question_number === answer.question_number);
+      
+      if (!question) {
+        gradedAnswers.push(answer);
+        continue;
+      }
+
+      const is_correct = answer.selected_option === question.correct_option;
+      const points_earned = is_correct ? (question.points || 1) : 0;
+      
+      if (is_correct) correctCount++;
+      totalEarnedPoints += points_earned;
+      totalPossiblePoints += (question.points || 1);
+
+      gradedAnswers.push({
+        ...answer,
+        is_correct,
+        points_earned
+      });
+    }
+
+    const percentage = totalPossiblePoints > 0 ? Math.round((totalEarnedPoints / totalPossiblePoints) * 100) : 0;
+
+    // Update attempt
+    attempt.answers = gradedAnswers;
+    attempt.time_taken = time_taken;
+    attempt.submitted_at = new Date();
+    attempt.status = 'submitted';
+    attempt.score = {
+      total_questions: quiz.total_questions,
+      correct_answers: correctCount,
+      wrong_answers: gradedAnswers.filter(a => a.selected_option && !a.is_correct).length,
+      unattempted: gradedAnswers.filter(a => !a.selected_option).length,
+      total_points: totalPossiblePoints,
+      earned_points: totalEarnedPoints,
+      percentage: percentage
+    };
+
+    await attempt.save();
+
+    // Check if student can retake
+    const previousAttemptsCount = await QuizAttempt.countDocuments({
+      quiz_id: quiz._id,
+      student_id: req.user.userId,
+      status: 'submitted'
+    });
+
+    const maxAttempts = quiz.quiz_settings?.max_attempts || 1;
+    const canRetake = previousAttemptsCount < maxAttempts;
+
+    // Update quiz analytics
+    await updateQuizAnalytics(quiz._id);
+
+    // Prepare detailed results
+    const detailed_results = quiz.questions.map(question => {
+      const studentAnswer = gradedAnswers.find(a => a.question_number === question.question_number);
+      return {
+        question_number: question.question_number,
+        question_text: question.question_text,
+        selected_option: studentAnswer?.selected_option || null,
+        correct_option: question.correct_option,
+        is_correct: studentAnswer?.is_correct || false,
+        points: question.points || 1,
+        points_earned: studentAnswer?.points_earned || 0,
+        explanation: question.explanation || null
+      };
+    });
+
+    res.json({
+      success: true,
+      message: "Quiz submitted successfully",
+      data: {
+        score: {
+          obtained: totalEarnedPoints,
+          total: totalPossiblePoints,
+          percentage: percentage,
+          correct: correctCount,
+          wrong: gradedAnswers.filter(a => a.selected_option && !a.is_correct).length,
+          unattempted: gradedAnswers.filter(a => !a.selected_option).length,
+          correct_answers: correctCount,
+          wrong_answers: gradedAnswers.filter(a => a.selected_option && !a.is_correct).length,
+          earned_points: totalEarnedPoints,
+          total_points: totalPossiblePoints
+        },
+        attempt_info: {
+          attempt_number: attempt.attempt_number,
+          time_taken: time_taken,
+          submitted_at: attempt.submitted_at
+        },
+        detailed_results: detailed_results,
+        can_retake: canRetake
+      }
+    });
+
+  } catch (error) {
+    console.error('Submit quiz attempt error:', error);
+    res.status(500).json({
+      success: false,
+      error: "Error submitting quiz attempt: " + error.message
+    });
+  }
+};
+
+// Get student's attempts for a specific quiz
+const getStudentQuizAttempts = async (req, res) => {
+  try {
+    const { quiz_id } = req.params;
+    const student_id = req.user.userId;
+
+    // Get quiz to get max attempts setting
+    const quiz = await Question.findById(quiz_id);
+    const maxAttempts = quiz?.quiz_settings?.max_attempts || 1;
+
+    const attempts = await QuizAttempt.find({
+      quiz_id,
+      student_id,
+      status: 'submitted'
+    })
+    .select('attempt_number score submitted_at status time_taken')
+    .sort({ submitted_at: -1 });
+
+    res.json({
+      success: true,
+      data: attempts,
+      total_attempts: attempts.length,
+      max_attempts_allowed: maxAttempts,
+      remaining_attempts: Math.max(0, maxAttempts - attempts.length)
+    });
+
+  } catch (error) {
+    console.error('Get student quiz attempts error:', error);
+    res.status(500).json({
+      success: false,
+      error: "Error fetching attempts: " + error.message
+    });
+  }
+};
+
+// Helper function to update quiz analytics
+const updateQuizAnalytics = async (quizId) => {
+  try {
+    const attempts = await QuizAttempt.find({ 
+      quiz_id: quizId, 
+      status: 'submitted' 
+    });
+
+    const analytics = {
+      total_attempts: attempts.length,
+      average_score: attempts.reduce((sum, attempt) => sum + attempt.score.percentage, 0) / attempts.length || 0,
+      highest_score: Math.max(...attempts.map(attempt => attempt.score.percentage), 0),
+      lowest_score: Math.min(...attempts.map(attempt => attempt.score.percentage), 0)
+    };
+
+    await Question.findByIdAndUpdate(quizId, { analytics });
+
+  } catch (error) {
+    console.error('Update quiz analytics error:', error);
+  }
+};
+
+// Module exports - ONE clean export
 module.exports = {
   createQuiz,
   getTeacherQuizzes,
@@ -633,5 +702,6 @@ module.exports = {
   getStudentQuizzes,
   startQuizAttempt,
   submitQuizAttempt,
-  getQuizAttempt
+  getQuizAttempt,
+  getStudentQuizAttempts
 };

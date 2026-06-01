@@ -10,7 +10,8 @@ const {
   getStudentQuizzes,
   startQuizAttempt,
   submitQuizAttempt,
-  getQuizAttempt
+  getQuizAttempt,
+  getStudentQuizAttempts  
 } = require('../controllers/questionController');
 
 const QuizAttempt = require('../models/quizAttemptModel'); // Import the QuizAttempt model
@@ -75,5 +76,6 @@ router.get('/student/quizzes', studentAuth, getStudentQuizzes);
 router.post('/student/quizzes/:quiz_id/start', studentAuth, startQuizAttempt);
 router.get('/student/attempt/:attempt_id', studentAuth, getQuizAttempt);
 router.post('/student/attempt/:attempt_id/submit', studentAuth, submitQuizAttempt);
-
+// Get student's attempts for a specific quiz
+router.get('/student/quiz/:quiz_id/attempts', studentAuth,getStudentQuizAttempts);
 module.exports = router;
