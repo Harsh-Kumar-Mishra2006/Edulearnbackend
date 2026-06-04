@@ -4,7 +4,6 @@ require('dotenv').config();
 const { storage } = require('./config/Cloudinary');
 const multer = require('multer');
 
-
 // Import routes
 const personalRoutes = require('./routes/personalRoute');
 const backgroundRoutes = require('./routes/backgroundRoute');
