@@ -7,7 +7,8 @@ const {
   getTeacherById,
   updateTeacher,
   deleteTeacher,
-  getTeacherStats
+  getTeacherStats,
+  changePassword
 } = require('../controllers/adminaddcontroller');
 
 // Import auth middleware (you'll need to create this)
@@ -19,7 +20,8 @@ router.use(adminAuth);
 // ✅ CORRECT ORDER - Specific routes first, dynamic routes last
 router.post('/add-teacher', addTeacher);
 router.get('/teachers', getAllTeachers); // Specific route
-router.get('/stats', getTeacherStats);   // Specific route  
+router.get('/stats', getTeacherStats);   // Specific route 
+router.put('/teachers/:id/change-password', changePassword); // PUT /api/admin/teachers/:id/change-password 
 // DYNAMIC routes with /teachers prefix  
 router.get('/teachers/:id', getTeacherById);      // GET /api/admin/teachers/:id
 router.put('/teachers/:id', updateTeacher);       // PUT /api/admin/teachers/:id  

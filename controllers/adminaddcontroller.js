@@ -2,7 +2,7 @@ const Teacher = require('../models/adminadddata');
 const Auth = require('../models/authdata');
 const bcryptjs = require('bcryptjs');
 const EmailService = require('../services/emailService'); // Import email service
-
+const jwt = require('jsonwebtoken');
 // Generate random password
 const generateRandomPassword = () => {
   const length = 8;
@@ -31,14 +31,15 @@ const addTeacher = async (req, res) => {
       qualification,
       years_of_experience,
       specialization,
-      bio
+      bio,
+      password
     } = req.body;
 
     const phoneValue = phone || phone_number;
 
 
     // Validation - update phone field name
-    if (!name || !email || !course || !phoneValue || !qualification || !years_of_experience) {
+    if (!name || !email || !course || !phoneValue || !qualification || !years_of_experience || !password) {
       console.log('🔴 Validation failed: Missing required fields');
       return res.status(400).json({
         success: false,
@@ -81,14 +82,14 @@ const addTeacher = async (req, res) => {
     console.log('🟢 3. No existing user in auth system');
 
     // Generate random password and username
-    const tempPassword = generateRandomPassword();
+    const adminProvidedPassword = password;  // Password typed by admin
     const username = email.split('@')[0] + Math.floor(Math.random() * 1000);
 
-    console.log('🟡 4. Generated credentials:', { username, tempPassword });
+    console.log('🟡 4. Admin-Provided credentials:', { username, adminProvidedPassword });
 
     // Hash password
     const salt = await bcryptjs.genSalt(10);
-    const hashedPassword = await bcryptjs.hash(tempPassword, salt);
+    const hashedPassword = await bcryptjs.hash(adminProvidedPassword, salt);
 
     console.log('🟢 5. Password hashed');
 
@@ -158,7 +159,7 @@ const addTeacher = async (req, res) => {
       data: teacherResponse,
       credentials: {
         username: username,
-        tempPassword: tempPassword,
+        tempPassword: adminProvidedPassword,
         loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
         teacherName: name,
         teacherEmail: email,
@@ -418,12 +419,78 @@ const getTeacherStats = async (req, res) => {
     });
   }
 };
-
+const changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    
+    // Get token from cookie or header
+    let token = req.cookies.token;
+    if (!token) {
+      const authHeader = req.header('Authorization');
+      if (authHeader) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: "No authentication token found"
+      });
+    }
+    
+    const decoded = jwt.verify(token, 'mypassword');
+    const user = await Auth.findById(decoded.userId);  // ✅ Use Auth, not auth
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found"
+      });
+    }
+    
+    // Verify old password
+    const isMatch = await bcryptjs.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: "Current password is incorrect"
+      });
+    }
+    
+    // Validate new password length
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: "New password must be at least 6 characters long"
+      });
+    }
+    
+    // Hash and save new password
+    const salt = await bcryptjs.genSalt(10);
+    const hashedPassword = await bcryptjs.hash(newPassword, salt);
+    user.password = hashedPassword;
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: "Password changed successfully"
+    });
+    
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
 module.exports = {
   addTeacher,
   getAllTeachers,
   getTeacherById,
   updateTeacher,
   deleteTeacher,
-  getTeacherStats
+  getTeacherStats,
+  changePassword
 };
