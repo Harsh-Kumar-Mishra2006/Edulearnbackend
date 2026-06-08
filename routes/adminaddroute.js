@@ -8,7 +8,8 @@ const {
   updateTeacher,
   deleteTeacher,
   getTeacherStats,
-  changePassword
+  changePassword,
+  getTeacherPassword
 } = require('../controllers/adminaddcontroller');
 
 // Import auth middleware (you'll need to create this)
