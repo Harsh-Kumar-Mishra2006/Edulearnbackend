@@ -72,4 +72,32 @@ router.get('/debug-auth', async (req, res) => {
   }
 });
 
+// Add this to authRoutes.js
+router.get('/all-students', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin or teacher
+    const requestingUser = await Auth.findById(req.user.userId);
+    if (requestingUser.role !== 'admin' && requestingUser.role !== 'teacher') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized access'
+      });
+    }
+    
+    const students = await Auth.find({ role: 'student' }).select('-password');
+    
+    res.json({
+      success: true,
+      students: students,
+      count: students.length
+    });
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
