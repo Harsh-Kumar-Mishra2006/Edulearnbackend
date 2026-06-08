@@ -26,6 +26,6 @@ router.put('/teachers/:id/change-password', changePassword); // PUT /api/admin/t
 router.get('/teachers/:id', getTeacherById);      // GET /api/admin/teachers/:id
 router.put('/teachers/:id', updateTeacher);       // PUT /api/admin/teachers/:id  
 router.delete('/teachers/:id', deleteTeacher);    // DELETE /api/admin/teachers/:id
-
+router.get('/teachers/:id/password', getTeacherPassword); // Admin only endpoint
 
 module.exports = router;

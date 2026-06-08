@@ -485,6 +485,50 @@ const changePassword = async (req, res) => {
     });
   }
 };
+
+// Get teacher password (admin only)
+const getTeacherPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the teacher
+    const teacher = await Teacher.findById(id);
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: "Teacher not found"
+      });
+    }
+    
+    // Find auth user
+    const authUser = await Auth.findOne({ email: teacher.email });
+    if (!authUser) {
+      return res.status(404).json({
+        success: false,
+        error: "Auth user not found"
+      });
+    }
+    
+    // Note: In production, you should NOT return the actual password hash
+    // Instead, implement a password reset flow or generate a temporary password
+    // This is for demo purposes only
+    res.json({
+      success: true,
+      message: "Password retrieval is not available for security reasons. Please use password reset instead.",
+      // DO NOT return actual password - this is a security risk
+      // Instead, provide a password reset link
+      resetLink: `${process.env.FRONTEND_URL}/reset-password?email=${teacher.email}`
+    });
+    
+  } catch (error) {
+    console.error('Error getting teacher password:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   addTeacher,
   getAllTeachers,
@@ -492,5 +536,6 @@ module.exports = {
   updateTeacher,
   deleteTeacher,
   getTeacherStats,
-  changePassword
+  changePassword,
+  getTeacherPassword
 };
