@@ -1,34 +1,46 @@
 // middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
+const Auth = require('../models/authdata');
 
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   try {
-    console.log('🔵 [Middleware] Authenticating token...');
+    // Get token from header or cookie
+    let token = req.header('Authorization') || req.headers.authorization;
     
-    // Check token from multiple sources
-    const token = req.header('Authorization')?.replace('Bearer ', '') || req.cookies?.token;
-    
-    console.log('🔵 [Middleware] Token exists:', token ? 'Yes' : 'No');
+    if (token) {
+      token = token.replace('Bearer ', '');
+    } else {
+      token = req.cookies?.token;
+    }
     
     if (!token) {
-      console.log('❌ [Middleware] No token provided');
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        error: 'Access denied. No token provided.' 
+        error: 'Access denied. No token provided.'
       });
     }
-
-    const verified = jwt.verify(token, 'mypassword');
-    console.log('🔵 [Middleware] Token verified for userId:', verified.userId);
     
-    req.user = verified;
+    // Clean token
+    token = token.trim().replace(/^["']|["']$/g, '');
+    
+    // Verify token
+    const decoded = jwt.verify(token, 'mypassword');
+    
+    // Set user info in req object - THIS IS CRITICAL
+    req.user = {
+      userId: decoded.userId,
+      email: decoded.email,
+      username: decoded.username,
+      role: decoded.role,
+      name: decoded.name
+    };
+    
     next();
-    
   } catch (error) {
-    console.log('❌ [Middleware] Token verification failed:', error.message);
-    res.status(401).json({ 
+    console.error('Auth middleware error:', error.message);
+    return res.status(401).json({
       success: false,
-      error: 'Invalid token' 
+      error: 'Invalid or expired token'
     });
   }
 };
