@@ -9,7 +9,8 @@ const {
   deleteTeacher,
   getTeacherStats,
   changePassword,
-  getTeacherPassword
+  getTeacherPassword,
+  getAllStudents
 } = require('../controllers/adminaddcontroller');
 
 // Import auth middleware (you'll need to create this)
@@ -28,5 +29,6 @@ router.get('/teachers/:id', getTeacherById);      // GET /api/admin/teachers/:id
 router.put('/teachers/:id', updateTeacher);       // PUT /api/admin/teachers/:id  
 router.delete('/teachers/:id', deleteTeacher);    // DELETE /api/admin/teachers/:id
 router.get('/teachers/:id/password', getTeacherPassword); // Admin only endpoint
+router.get('/students', getAllStudents);
 
 module.exports = router;

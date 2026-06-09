@@ -528,6 +528,55 @@ const getTeacherPassword = async (req, res) => {
     });
   }
 };
+// Add this to adminaddController.js
+const getAllStudents = async (req, res) => {
+  try {
+    console.log('🔵 getAllStudents called from admin controller');
+    console.log('🔵 req.user:', req.user);
+    
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized - User not authenticated'
+      });
+    }
+    
+    // Get requesting user's role
+    const requestingUser = await Auth.findById(req.user.userId);
+    
+    if (!requestingUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    if (requestingUser.role !== 'admin' && requestingUser.role !== 'teacher') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized. Only admins and teachers can view students.'
+      });
+    }
+    
+    const students = await Auth.find({ role: 'student' })
+      .select('-password')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      students: students,
+      total: students.length
+    });
+    
+  } catch (error) {
+    console.error('Error in getAllStudents:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 
 module.exports = {
   addTeacher,
@@ -537,5 +586,6 @@ module.exports = {
   deleteTeacher,
   getTeacherStats,
   changePassword,
-  getTeacherPassword
+  getTeacherPassword,
+  getAllStudents
 };
