@@ -1,8 +1,9 @@
+// controllers/adminaddcontroller.js
 const Teacher = require('../models/adminadddata');
 const Auth = require('../models/authdata');
 const bcryptjs = require('bcryptjs');
-const EmailService = require('../services/emailService'); // Import email service
 const jwt = require('jsonwebtoken');
+
 // Generate random password
 const generateRandomPassword = () => {
   const length = 8;
@@ -14,19 +15,18 @@ const generateRandomPassword = () => {
   return password;
 };
 
-// Add new teacher with email notification
+// Add new teacher
 const addTeacher = async (req, res) => {
   try {
     console.log('=== 🟡 ADD TEACHER PROCESS START ===');
     console.log('Request body:', req.body);
-    console.log('Admin user:', req.user);
 
     const {
       name,
       email,
       course,
-      phone, // Accept phone
-  phone_number, // Also accept phone_number for compatibility
+      phone,
+      phone_number,
       address,
       qualification,
       years_of_experience,
@@ -37,17 +37,13 @@ const addTeacher = async (req, res) => {
 
     const phoneValue = phone || phone_number;
 
-
-    // Validation - update phone field name
     if (!name || !email || !course || !phoneValue || !qualification || !years_of_experience || !password) {
-      console.log('🔴 Validation failed: Missing required fields');
       return res.status(400).json({
         success: false,
         error: "All required fields must be filled"
       });
     }
 
-    // Validate address object
     if (!address || !address.street || !address.city || !address.state || !address.pincode) {
       return res.status(400).json({
         success: false,
@@ -55,51 +51,33 @@ const addTeacher = async (req, res) => {
       });
     }
 
-    console.log('🟢 1. All validations passed');
-
-    // Check if teacher already exists with this email
     const existingTeacher = await Teacher.findOne({ email });
     if (existingTeacher) {
-      console.log('🔴 Teacher already exists with this email');
       return res.status(400).json({
         success: false,
         error: "Teacher with this email already exists"
       });
     }
 
-    console.log('🟢 2. Email is unique');
-
-    // Check if user already exists in auth collection
     const existingUser = await Auth.findOne({ email });
     if (existingUser) {
-      console.log('🔴 User already exists with this email in auth system');
       return res.status(400).json({
         success: false,
         error: "User with this email already exists in the system"
       });
     }
 
-    console.log('🟢 3. No existing user in auth system');
-
-    // Generate random password and username
-    const adminProvidedPassword = password;  // Password typed by admin
+    const adminProvidedPassword = password;
     const username = email.split('@')[0] + Math.floor(Math.random() * 1000);
 
-    console.log('🟡 4. Admin-Provided credentials:', { username, adminProvidedPassword });
-
-    // Hash password
     const salt = await bcryptjs.genSalt(10);
     const hashedPassword = await bcryptjs.hash(adminProvidedPassword, salt);
 
-    console.log('🟢 5. Password hashed');
-
-    // ✅ FIXED: Use phone directly (not phone_number)
-    // Create user in auth collection
     const newUser = new Auth({
       name: name,
       email: email,
       username: username,
-      phone: phoneValue, // ✅ Use phone (not phone_number)
+      phone: phoneValue,
       password: hashedPassword,
       role: 'teacher',
       profile: {
@@ -111,33 +89,29 @@ const addTeacher = async (req, res) => {
       isActive: true
     });
 
-    console.log('🟡 6. Creating auth user...');
     await newUser.save();
-    console.log('🟢 7. Auth user created:', newUser._id);
 
-    // Create teacher record - use phone_number for Teacher model
     const teacher = new Teacher({
       name,
       email,
       course,
-      phone_number: phoneValue, // ✅ Map phone to phone_number for Teacher model
+      phone_number: phoneValue,
       address,
       qualification,
       years_of_experience,
       specialization: specialization || [],
       bio: bio || '',
-      created_by: req.user.id // From auth middleware
+      created_by: req.user?.id || req.user?.userId
     });
 
-    console.log('🟡 8. Creating teacher record...');
     await teacher.save();
-    console.log('🟢 9. Teacher record created:', teacher._id);
 
-    // Prepare response (don't send password in response)
     const teacherResponse = {
       _id: teacher._id,
       name: teacher.name,
       email: teacher.email,
+      username: username,
+      password: adminProvidedPassword,
       course: teacher.course,
       phone_number: teacher.phone_number,
       address: teacher.address,
@@ -149,42 +123,25 @@ const addTeacher = async (req, res) => {
       joining_date: teacher.joining_date
     };
 
-    console.log('✅ TEACHER ADDED SUCCESSFULLY');
-    
-    // ... rest of the code for email sending ...
-    
     res.status(201).json({
       success: true,
-      message: "Teacher added successfully! Credentials have been sent to teacher's email.",
+      message: "Teacher added successfully!",
       data: teacherResponse,
       credentials: {
         username: username,
         tempPassword: adminProvidedPassword,
-        loginUrl: process.env.FRONTEND_URL + '/login' || 'http://localhost:5173/login',
         teacherName: name,
-        teacherEmail: email,
-        note: "These credentials have also been sent to the teacher's email."
+        teacherEmail: email
       }
     });
 
   } catch (error) {
     console.error('🔴 ADD TEACHER ERROR:', error);
     
-    // Handle duplicate key errors
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
         error: "Duplicate entry. Teacher with this email already exists."
-      });
-    }
-
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      console.error('🔴 Validation errors:', errors);
-      return res.status(400).json({
-        success: false,
-        error: errors.join(', ')
       });
     }
 
@@ -195,12 +152,11 @@ const addTeacher = async (req, res) => {
   }
 };
 
-// controllers/adminaddcontroller.js
+// Get all teachers
 const getAllTeachers = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '', status = '', getAll = 'false' } = req.query;
 
-    // Build query
     let query = {};
     
     if (search) {
@@ -217,39 +173,34 @@ const getAllTeachers = async (req, res) => {
 
     let teachers;
     let total;
-    let pagination = null;
 
-    // If getAll is true, return all teachers without pagination
     if (getAll === 'true') {
-      teachers = await Teacher.find(query)
-        .sort({ createdAt: -1 })
-        .select('-__v');
+      teachers = await Teacher.find(query).sort({ createdAt: -1 });
       total = teachers.length;
     } else {
-      // Paginated response
       teachers = await Teacher.find(query)
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
-        .skip((parseInt(page) - 1) * parseInt(limit))
-        .select('-__v');
+        .skip((parseInt(page) - 1) * parseInt(limit));
       
       total = await Teacher.countDocuments(query);
-      
-      pagination = {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        totalTeachers: total,
-        limit: parseInt(limit),
-        hasNext: parseInt(page) * parseInt(limit) < total,
-        hasPrev: parseInt(page) > 1
-      };
     }
+
+    // Fetch auth data for each teacher
+    const teachersWithDetails = await Promise.all(teachers.map(async (teacher) => {
+      const authUser = await Auth.findOne({ email: teacher.email });
+      return {
+        ...teacher.toObject(),
+        username: authUser ? authUser.username : teacher.email.split('@')[0],
+        password: '••••••••', // Placeholder - actual password is hashed
+        phone: teacher.phone_number
+      };
+    }));
 
     res.json({
       success: true,
-      data: teachers,
-      total: total,
-      ...(pagination && { pagination })
+      data: teachersWithDetails,
+      total: total
     });
 
   } catch (error) {
@@ -265,7 +216,6 @@ const getAllTeachers = async (req, res) => {
 const getTeacherById = async (req, res) => {
   try {
     const { id } = req.params;
-
     const teacher = await Teacher.findById(id);
     
     if (!teacher) {
@@ -295,11 +245,7 @@ const updateTeacher = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    const teacher = await Teacher.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const teacher = await Teacher.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 
     if (!teacher) {
       return res.status(404).json({
@@ -316,15 +262,6 @@ const updateTeacher = async (req, res) => {
 
   } catch (error) {
     console.error('Error updating teacher:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        error: errors.join(', ')
-      });
-    }
-
     res.status(500).json({
       success: false,
       error: "Error updating teacher: " + error.message
@@ -332,42 +269,22 @@ const updateTeacher = async (req, res) => {
   }
 };
 
+// Delete teacher (soft delete)
 const deleteTeacher = async (req, res) => {
   try {
     const { id } = req.params;
     
-    console.log('🟡 DELETE BACKEND - Teacher ID to delete:', id);
-    console.log('🟡 Request user:', req.user);
-
-    // First, find the teacher to get their email
     const teacher = await Teacher.findById(id);
     
     if (!teacher) {
-      console.log('🔴 Teacher not found with ID:', id);
       return res.status(404).json({
         success: false,
         error: "Teacher not found"
       });
     }
 
-    console.log('🟡 Found teacher:', teacher.email);
-
-    // Soft delete - update status to inactive
-    const updatedTeacher = await Teacher.findByIdAndUpdate(
-      id,
-      { status: 'inactive' },
-      { new: true }
-    );
-
-    console.log('🟡 Teacher soft deleted:', updatedTeacher.status);
-
-    // Also deactivate the auth account
-    const authUpdate = await Auth.findOneAndUpdate(
-      { email: teacher.email },
-      { isActive: false }
-    );
-
-    console.log('🟡 Auth account deactivated:', authUpdate ? 'Yes' : 'No');
+    await Teacher.findByIdAndUpdate(id, { status: 'inactive' });
+    await Auth.findOneAndUpdate({ email: teacher.email }, { isActive: false });
 
     res.json({
       success: true,
@@ -390,14 +307,8 @@ const getTeacherStats = async (req, res) => {
     const activeTeachers = await Teacher.countDocuments({ status: 'active' });
     const inactiveTeachers = await Teacher.countDocuments({ status: 'inactive' });
     
-    // Count teachers by domain
     const domainStats = await Teacher.aggregate([
-      {
-        $group: {
-          _id: '$course',
-          count: { $sum: 1 }
-        }
-      },
+      { $group: { _id: '$course', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
 
@@ -419,11 +330,12 @@ const getTeacherStats = async (req, res) => {
     });
   }
 };
+
+// Change password
 const changePassword = async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     
-    // Get token from cookie or header
     let token = req.cookies.token;
     if (!token) {
       const authHeader = req.header('Authorization');
@@ -440,7 +352,7 @@ const changePassword = async (req, res) => {
     }
     
     const decoded = jwt.verify(token, 'mypassword');
-    const user = await Auth.findById(decoded.userId);  // ✅ Use Auth, not auth
+    const user = await Auth.findById(decoded.userId);
     
     if (!user) {
       return res.status(404).json({
@@ -449,7 +361,6 @@ const changePassword = async (req, res) => {
       });
     }
     
-    // Verify old password
     const isMatch = await bcryptjs.compare(oldPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({
@@ -458,7 +369,6 @@ const changePassword = async (req, res) => {
       });
     }
     
-    // Validate new password length
     if (!newPassword || newPassword.length < 6) {
       return res.status(400).json({
         success: false,
@@ -466,7 +376,6 @@ const changePassword = async (req, res) => {
       });
     }
     
-    // Hash and save new password
     const salt = await bcryptjs.genSalt(10);
     const hashedPassword = await bcryptjs.hash(newPassword, salt);
     user.password = hashedPassword;
@@ -491,7 +400,6 @@ const getTeacherPassword = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Find the teacher
     const teacher = await Teacher.findById(id);
     if (!teacher) {
       return res.status(404).json({
@@ -500,23 +408,9 @@ const getTeacherPassword = async (req, res) => {
       });
     }
     
-    // Find auth user
-    const authUser = await Auth.findOne({ email: teacher.email });
-    if (!authUser) {
-      return res.status(404).json({
-        success: false,
-        error: "Auth user not found"
-      });
-    }
-    
-    // Note: In production, you should NOT return the actual password hash
-    // Instead, implement a password reset flow or generate a temporary password
-    // This is for demo purposes only
     res.json({
       success: true,
-      message: "Password retrieval is not available for security reasons. Please use password reset instead.",
-      // DO NOT return actual password - this is a security risk
-      // Instead, provide a password reset link
+      message: "Use password reset feature to set new password",
       resetLink: `${process.env.FRONTEND_URL}/reset-password?email=${teacher.email}`
     });
     
@@ -528,12 +422,10 @@ const getTeacherPassword = async (req, res) => {
     });
   }
 };
-// Add this to adminaddController.js
+
+// Get all students (basic)
 const getAllStudents = async (req, res) => {
   try {
-    console.log('🔵 getAllStudents called from admin controller');
-    console.log('🔵 req.user:', req.user);
-    
     if (!req.user || !req.user.userId) {
       return res.status(401).json({
         success: false,
@@ -541,7 +433,6 @@ const getAllStudents = async (req, res) => {
       });
     }
     
-    // Get requesting user's role
     const requestingUser = await Auth.findById(req.user.userId);
     
     if (!requestingUser) {
@@ -577,7 +468,202 @@ const getAllStudents = async (req, res) => {
   }
 };
 
+// Get all students with details (including password placeholder)
+const getAllStudentsWithDetails = async (req, res) => {
+  try {
+    console.log('🔵 getAllStudentsWithDetails called');
+    
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized - User not authenticated'
+      });
+    }
+    
+    const requestingUser = await Auth.findById(req.user.userId);
+    
+    if (!requestingUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    if (requestingUser.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized. Only admins can view student details.'
+      });
+    }
+    
+    const students = await Auth.find({ role: 'student' }).sort({ createdAt: -1 });
+    
+    const formattedStudents = students.map(student => ({
+      _id: student._id,
+      name: student.name,
+      email: student.email,
+      username: student.username,
+      phone: student.phone,
+      password: '••••••••', // Placeholder
+      age: student.profile?.age || 'N/A',
+      gender: student.profile?.gender || 'N/A',
+      dob: student.profile?.dob || 'N/A',
+      role: student.role,
+      isActive: student.isActive,
+      createdAt: student.createdAt
+    }));
+    
+    res.json({
+      success: true,
+      students: formattedStudents,
+      total: formattedStudents.length
+    });
+    
+  } catch (error) {
+    console.error('Error in getAllStudentsWithDetails:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
 
+// Get teacher credentials (admin only)
+const getTeacherCredentials = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: 'Teacher not found'
+      });
+    }
+    
+    const authUser = await Auth.findOne({ email: teacher.email });
+    if (!authUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Auth user not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        username: authUser.username,
+        email: teacher.email
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching teacher credentials:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// Reset student password (admin only)
+const resetStudentPassword = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { newPassword } = req.body;
+    
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    const student = await Auth.findById(studentId);
+    if (!student || student.role !== 'student') {
+      return res.status(404).json({
+        success: false,
+        error: 'Student not found'
+      });
+    }
+    
+    const salt = await bcryptjs.genSalt(10);
+    const hashedPassword = await bcryptjs.hash(newPassword, salt);
+    student.password = hashedPassword;
+    await student.save();
+    
+    res.json({
+      success: true,
+      message: 'Student password reset successfully',
+      newPassword: newPassword
+    });
+    
+  } catch (error) {
+    console.error('Error resetting student password:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// Reset teacher password (admin only)
+const resetTeacherPassword = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    const { newPassword } = req.body;
+    
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        error: 'Teacher not found'
+      });
+    }
+    
+    const authUser = await Auth.findOne({ email: teacher.email });
+    if (!authUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Auth user not found'
+      });
+    }
+    
+    const salt = await bcryptjs.genSalt(10);
+    const hashedPassword = await bcryptjs.hash(newPassword, salt);
+    authUser.password = hashedPassword;
+    await authUser.save();
+    
+    res.json({
+      success: true,
+      message: 'Teacher password reset successfully',
+      newPassword: newPassword
+    });
+    
+  } catch (error) {
+    console.error('Error resetting teacher password:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// Export all functions
 module.exports = {
   addTeacher,
   getAllTeachers,
@@ -587,5 +673,9 @@ module.exports = {
   getTeacherStats,
   changePassword,
   getTeacherPassword,
-  getAllStudents
+  getAllStudents,
+  getAllStudentsWithDetails,
+  getTeacherCredentials,
+  resetStudentPassword,
+  resetTeacherPassword
 };

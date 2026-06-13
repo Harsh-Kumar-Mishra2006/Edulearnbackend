@@ -791,6 +791,65 @@ const getStudentProfileData = async (req, res) => {
   }
 };
 
+// Add to authController.js
+
+// ✅ NEW: Get all students with actual passwords (admin only)
+const getAllStudentsForAdmin = async (req, res) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'No token provided'
+      });
+    }
+    
+    const decoded = jwt.verify(token, 'mypassword');
+    const admin = await Auth.findById(decoded.userId);
+    
+    if (admin.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    // Get all students
+    const students = await Auth.find({ role: 'student' });
+    
+    // Format students with actual passwords (for admin view only)
+    const studentsWithPasswords = students.map(student => ({
+      _id: student._id,
+      name: student.name,
+      email: student.email,
+      username: student.username,
+      phone: student.phone,
+      password: '••••••••', // Security: Don't send actual password hash
+      age: student.profile?.age || 'N/A',
+      gender: student.profile?.gender || 'N/A',
+      dob: student.profile?.dob || 'N/A',
+      role: student.role,
+      isActive: student.isActive,
+      createdAt: student.createdAt
+    }));
+    
+    res.json({
+      success: true,
+      students: studentsWithPasswords,
+      total: studentsWithPasswords.length
+    });
+    
+  } catch (error) {
+    console.error('Error in getAllStudentsForAdmin:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+
 module.exports = {
   signup,
   login,
@@ -802,5 +861,6 @@ module.exports = {
   getStudentDetails,
   getCombinedStudentProfile,
   updateStudentProfile,
-  getStudentProfileData
+  getStudentProfileData,
+  getAllStudentsForAdmin
 };
