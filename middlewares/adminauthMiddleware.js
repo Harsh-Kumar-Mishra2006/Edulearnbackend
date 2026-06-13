@@ -1,81 +1,66 @@
-// middleware/adminAuthMiddleware.js
+// middlewares/adminauthMiddleware.js
 const jwt = require('jsonwebtoken');
 const Auth = require('../models/authdata');
 
 const adminAuth = async (req, res, next) => {
   try {
     // Get token from header
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    let token = req.header('Authorization') || req.headers.authorization;
     
-    console.log('🔐 Admin Auth - Token received:', token ? 'Yes' : 'No');
+    if (token) {
+      token = token.replace('Bearer ', '');
+    } else {
+      token = req.cookies?.token;
+    }
     
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: "No token provided, access denied"
+        error: 'No token provided. Please login.'
       });
     }
-
+    
+    // Clean token
+    token = token.trim().replace(/^["']|["']$/g, '');
+    
     // Verify token
     const decoded = jwt.verify(token, 'mypassword');
-    console.log('🔐 Admin Auth - Decoded token:', decoded);
+    console.log('✅ Token verified for user:', decoded.userId);
     
-    // Check if user exists and is admin
+    // Find user
     const user = await Auth.findById(decoded.userId);
     
     if (!user) {
-      console.log('🔐 Admin Auth - User not found with ID:', decoded.userId);
       return res.status(401).json({
         success: false,
-        error: "User not found"
+        error: 'User not found'
       });
     }
-
-    console.log('🔐 Admin Auth - User role:', user.role);
     
+    // Check if user is admin
     if (user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-        error: "Access denied. Admin privileges required."
+        error: 'Admin access required'
       });
     }
-
-    // Add user to request
+    
+    // Set both formats for compatibility
     req.user = {
       id: user._id,
-      name: user.name,
+      userId: user._id,
       email: user.email,
-      role: user.role
-    };
-    
-    req.admin = {
-      id: user._id,
+      role: user.role,
       name: user.name
     };
     
-    console.log('🔐 Admin Auth - Success! User:', req.user.name);
     next();
-
+    
   } catch (error) {
-    console.error('🔐 Admin Auth Error:', error.message);
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid token"
-      });
-    }
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        error: "Token expired"
-      });
-    }
-    
-    res.status(401).json({
+    console.error('Auth error:', error.message);
+    return res.status(401).json({
       success: false,
-      error: "Authentication failed"
+      error: 'Invalid or expired token'
     });
   }
 };

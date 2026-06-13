@@ -423,17 +423,25 @@ const getTeacherPassword = async (req, res) => {
   }
 };
 
-// Get all students (basic)
+// controllers/adminaddcontroller.js - Update these functions
+
+// Get all students (basic) - FIXED
 const getAllStudents = async (req, res) => {
   try {
-    if (!req.user || !req.user.userId) {
+    console.log('🔵 getAllStudents called');
+    console.log('🔵 req.user:', req.user);
+    
+    // Check for both possible user ID locations
+    const userId = req.user?.userId || req.user?.id;
+    
+    if (!userId) {
       return res.status(401).json({
         success: false,
         error: 'Unauthorized - User not authenticated'
       });
     }
     
-    const requestingUser = await Auth.findById(req.user.userId);
+    const requestingUser = await Auth.findById(userId);
     
     if (!requestingUser) {
       return res.status(404).json({
@@ -441,6 +449,8 @@ const getAllStudents = async (req, res) => {
         error: 'User not found'
       });
     }
+    
+    console.log('🔵 Requesting user role:', requestingUser.role);
     
     if (requestingUser.role !== 'admin' && requestingUser.role !== 'teacher') {
       return res.status(403).json({
@@ -452,6 +462,8 @@ const getAllStudents = async (req, res) => {
     const students = await Auth.find({ role: 'student' })
       .select('-password')
       .sort({ createdAt: -1 });
+    
+    console.log(`✅ Found ${students.length} students`);
     
     res.json({
       success: true,
@@ -468,19 +480,23 @@ const getAllStudents = async (req, res) => {
   }
 };
 
-// Get all students with details (including password placeholder)
+// Get all students with details - FIXED
 const getAllStudentsWithDetails = async (req, res) => {
   try {
     console.log('🔵 getAllStudentsWithDetails called');
+    console.log('🔵 req.user:', req.user);
     
-    if (!req.user || !req.user.userId) {
+    // Check for both possible user ID locations
+    const userId = req.user?.userId || req.user?.id;
+    
+    if (!userId) {
       return res.status(401).json({
         success: false,
         error: 'Unauthorized - User not authenticated'
       });
     }
     
-    const requestingUser = await Auth.findById(req.user.userId);
+    const requestingUser = await Auth.findById(userId);
     
     if (!requestingUser) {
       return res.status(404).json({
@@ -488,6 +504,8 @@ const getAllStudentsWithDetails = async (req, res) => {
         error: 'User not found'
       });
     }
+    
+    console.log('🔵 Requesting user role:', requestingUser.role);
     
     if (requestingUser.role !== 'admin') {
       return res.status(403).json({
@@ -504,7 +522,7 @@ const getAllStudentsWithDetails = async (req, res) => {
       email: student.email,
       username: student.username,
       phone: student.phone,
-      password: '••••••••', // Placeholder
+      password: 'Student@123', // Show default password for demo
       age: student.profile?.age || 'N/A',
       gender: student.profile?.gender || 'N/A',
       dob: student.profile?.dob || 'N/A',
@@ -512,6 +530,8 @@ const getAllStudentsWithDetails = async (req, res) => {
       isActive: student.isActive,
       createdAt: student.createdAt
     }));
+    
+    console.log(`✅ Found ${formattedStudents.length} students with details`);
     
     res.json({
       success: true,
