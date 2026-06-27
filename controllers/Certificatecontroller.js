@@ -9,7 +9,7 @@ const uploadCertificate = async (req, res) => {
   console.log('📎 File:', req.file);
 
   try {
-    const { student_email, course_title, completion_date } = req.body;s
+    const { student_email, course_title, completion_date } = req.body;
 
     // Validate required fields
     if (!student_email || !course_title || !completion_date) {
