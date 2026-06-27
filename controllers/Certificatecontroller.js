@@ -1,41 +1,55 @@
-// controllers/Certificatecontroller.js
 const Certificate = require('../models/Certificatemodel');
-const Student = require('../models/authdata'); // This exports Auth model
+const Auth = require('../models/authdata');
 const fs = require('fs');
-// controllers/Certificatecontroller.js → Replace ONLY this function
+const path = require('path');
+
+// ============ UPLOAD CERTIFICATE ============
 const uploadCertificate = async (req, res) => {
+  console.log('📤 Upload request received');
+  console.log('📋 Body:', req.body);
+  console.log('📎 File:', req.file);
+
   try {
     const { student_email, course_title, completion_date } = req.body;
 
+    // Validate required fields
     if (!student_email || !course_title || !completion_date) {
-      if (req.file) fs.unlinkSync(req.file.path);
-      return res.status(400).json({ success: false, error: 'All fields are required' });
+      if (req.file) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
+      return res.status(400).json({ 
+        success: false, 
+        error: 'All fields are required: student_email, course_title, completion_date' 
+      });
     }
 
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'Certificate file is required' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Certificate file is required' 
+      });
     }
 
-    if (!req.admin) {
-      fs.unlinkSync(req.file.path);
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-
-    const Student = require('../models/authdata'); // Auth model
-    const student = await Student.findOne({ email: student_email });
+    // Find student by email
+    const student = await Auth.findOne({ email: student_email });
     if (!student) {
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ success: false, error: 'Student not found' });
+      if (req.file) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Student not found with this email' 
+      });
     }
 
+    // Create certificate
     const certificate = new Certificate({
       student_id: student._id,
       student_name: student.name || student.email.split('@')[0],
       student_email: student.email,
       course_title: course_title.trim(),
       completion_date: new Date(completion_date),
-      issued_by: req.admin.id,
-      issuer_name: req.admin.name || 'Admin',
+      issuer_name: 'Admin', // Default issuer name
       certificate_file: {
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -45,29 +59,33 @@ const uploadCertificate = async (req, res) => {
       }
     });
 
-    // Save first
     await certificate.save();
+    console.log('✅ Certificate saved:', certificate._id);
 
-    // Now fetch fresh document with populate
+    // Get populated certificate
     const populatedCertificate = await Certificate.findById(certificate._id)
-      .populate('student_id', 'name email')
-      .populate('issued_by', 'name');
+      .populate('student_id', 'name email phone')
+      .populate('issued_by', 'name email');
 
-    res.json({
+    res.status(201).json({
       success: true,
       message: 'Certificate uploaded successfully!',
       data: populatedCertificate
     });
 
   } catch (error) {
+    console.error('💥 Upload error:', error);
     if (req.file) {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
-    console.error('Upload error:', error.message);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Upload failed' 
+    });
   }
 };
 
+// ============ GET ALL CERTIFICATES ============
 const getAllCertificates = async (req, res) => {
   try {
     const { page = 1, limit = 10, student_email, status } = req.query;
@@ -77,8 +95,8 @@ const getAllCertificates = async (req, res) => {
     if (status) filter.status = status;
 
     const certificates = await Certificate.find(filter)
-      .populate('student_id', 'name email')
-      .populate('issued_by', 'name')
+      .populate('student_id', 'name email phone')
+      .populate('issued_by', 'name email')
       .sort({ issue_date: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -88,15 +106,23 @@ const getAllCertificates = async (req, res) => {
     res.json({
       success: true,
       data: certificates,
-      pagination: { current: Number(page), pages: Math.ceil(total / limit), total }
+      pagination: { 
+        current: Number(page), 
+        pages: Math.ceil(total / limit), 
+        total 
+      }
     });
 
   } catch (error) {
     console.error('Get certificates error:', error.message);
-    res.status(500).json({ success: false, error: 'Failed to load certificates' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to load certificates' 
+    });
   }
 };
 
+// ============ GET CERTIFICATE BY ID ============
 const getCertificateById = async (req, res) => {
   try {
     const certificate = await Certificate.findById(req.params.id)
@@ -104,25 +130,41 @@ const getCertificateById = async (req, res) => {
       .populate('issued_by', 'name email');
 
     if (!certificate) {
-      return res.status(404).json({ success: false, error: 'Certificate not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Certificate not found' 
+      });
     }
 
     res.json({ success: true, data: certificate });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Server error' });
+    console.error('Get certificate error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Server error' 
+    });
   }
 };
 
+// ============ DOWNLOAD CERTIFICATE ============
 const downloadCertificate = async (req, res) => {
   try {
     const certificate = await Certificate.findById(req.params.id);
-    if (!certificate?.certificate_file?.path) {
-      return res.status(404).json({ success: false, error: 'File not found' });
+    
+    if (!certificate || !certificate.certificate_file?.path) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'File not found' 
+      });
     }
 
     const filePath = certificate.certificate_file.path;
+    
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, error: 'File missing on server' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'File missing on server' 
+      });
     }
 
     res.setHeader('Content-Type', certificate.certificate_file.mimetype || 'application/pdf');
@@ -130,25 +172,65 @@ const downloadCertificate = async (req, res) => {
     fs.createReadStream(filePath).pipe(res);
 
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Download failed' });
+    console.error('Download error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Download failed' 
+    });
   }
 };
 
+// ============ REVOKE CERTIFICATE ============
 const revokeCertificate = async (req, res) => {
   try {
     const certificate = await Certificate.findByIdAndUpdate(
       req.params.id,
-      { status: 'revoked', revocation_reason: req.body.reason || 'Revoked by admin' },
+      { 
+        status: 'revoked',
+        revoked_at: new Date(),
+        revocation_reason: req.body.reason || 'Revoked by admin'
+      },
       { new: true }
     );
 
     if (!certificate) {
-      return res.status(404).json({ success: false, error: 'Certificate not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Certificate not found' 
+      });
     }
 
-    res.json({ success: true, message: 'Certificate revoked', data: certificate });
+    res.json({ 
+      success: true, 
+      message: 'Certificate revoked successfully',
+      data: certificate 
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Revoke failed' });
+    console.error('Revoke error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Revoke failed' 
+    });
+  }
+};
+
+// ============ GET STATISTICS ============
+const getStats = async (req, res) => {
+  try {
+    const total = await Certificate.countDocuments();
+    const issued = await Certificate.countDocuments({ status: 'issued' });
+    const revoked = await Certificate.countDocuments({ status: 'revoked' });
+    
+    res.json({
+      success: true,
+      data: { total, issued, revoked }
+    });
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get stats' 
+    });
   }
 };
 
@@ -157,5 +239,6 @@ module.exports = {
   getAllCertificates,
   getCertificateById,
   downloadCertificate,
-  revokeCertificate
+  revokeCertificate,
+  getStats  // ← ADD THIS
 };

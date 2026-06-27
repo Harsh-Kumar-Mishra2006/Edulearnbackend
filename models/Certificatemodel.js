@@ -1,19 +1,31 @@
-// models/Certificatemodel.js
 const mongoose = require('mongoose');
 
 const certificateSchema = new mongoose.Schema({
-  certificate_id: { type: String, unique: true },
+  certificate_id: { 
+    type: String, 
+    unique: true 
+  },
   student_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Auth',           // ← Correct model: Auth (from authdata.js)
-    required: true
+    ref: 'Auth',
+    required: false  // ← Changed to false - will be set from email
   },
-  student_name: { type: String, required: true },
-  student_email: { type: String, required: true },
-
-  course_title: { type: String, required: true },
-  course_category: { type: String, default: 'General' },
-
+  student_name: { 
+    type: String, 
+    required: true 
+  },
+  student_email: { 
+    type: String, 
+    required: true 
+  },
+  course_title: { 
+    type: String, 
+    required: true 
+  },
+  course_category: { 
+    type: String, 
+    default: 'General' 
+  },
   certificate_file: {
     filename: String,
     originalName: String,
@@ -21,22 +33,40 @@ const certificateSchema = new mongoose.Schema({
     mimetype: String,
     size: Number
   },
-
-  completion_date: { type: Date, required: true },
-  issue_date: { type: Date, default: Date.now },
+  completion_date: { 
+    type: Date, 
+    required: true 
+  },
+  issue_date: { 
+    type: Date, 
+    default: Date.now 
+  },
   status: {
     type: String,
     enum: ['issued', 'pending', 'revoked'],
     default: 'issued'
   },
-
   issued_by: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Auth',           // ← Admin is also in Auth collection
-    required: true
+    ref: 'Auth',
+    required: false  // ← Changed to false
   },
-  issuer_name: { type: String, required: true },
-  verification_code: { type: String, unique: true }
+  issuer_name: { 
+    type: String, 
+    required: false  // ← Changed to false
+  },
+  verification_code: { 
+    type: String, 
+    unique: true 
+  },
+  revoked_at: {
+    type: Date,
+    default: null
+  },
+  revocation_reason: {
+    type: String,
+    default: ''
+  }
 }, { timestamps: true });
 
 // Auto-generate certificate_id and verification_code

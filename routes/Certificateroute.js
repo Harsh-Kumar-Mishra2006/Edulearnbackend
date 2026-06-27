@@ -1,4 +1,3 @@
-// routes/Certificateroute.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -6,57 +5,66 @@ const path = require('path');
 const fs = require('fs');
 
 const Certificate = require('../models/Certificatemodel');
-// REMOVE adminAuth import - we won't use it
-// const { adminAuth } = require('../middlewares/adminauthMiddleware');
+const Auth = require('../models/authdata');
 
-// Multer config
+// ============ CREATE UPLOADS DIRECTORY ============
+const uploadDir = 'uploads/certificates/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log('✅ Uploads directory created:', uploadDir);
+}
+
+// ============ MULTER CONFIG ============
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = 'uploads/certificates/';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    cb(null, `CERT_${Date.now()}_${Math.floor(Math.random() * 10000)}${path.extname(file.originalname)}`);
+    const unique = `CERT_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const ext = path.extname(file.originalname);
+    cb(null, `${unique}${ext}`);
   }
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { 
+    fileSize: 10 * 1024 * 1024 // 10MB
+  },
   fileFilter: (req, file, cb) => {
     const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Invalid file type'));
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, JPG, PNG allowed.'));
+    }
   }
 });
 
-// Controllers
+// ============ CONTROLLERS ============
 const {
   uploadCertificate,
   getAllCertificates,
   getCertificateById,
   downloadCertificate,
-  revokeCertificate
+  revokeCertificate,
+  getStats  // ← ADD THIS
 } = require('../controllers/Certificatecontroller');
 
-// ==================== PUBLIC ROUTES (No Auth Required) ====================
+// ============ ROUTES ============
 
-// Upload certificate - NO AUTH REQUIRED
+// ⚠️ IMPORTANT: Specific routes MUST come before dynamic routes (/:id)
+
+// Upload certificate
 router.post('/upload', upload.single('certificate_file'), uploadCertificate);
 
-// Get all certificates - NO AUTH REQUIRED
+// Get statistics
+router.get('/stats', getStats);  // ← ADD THIS - MUST BE BEFORE /:id
+
+// Get all certificates
 router.get('/', getAllCertificates);
 
-// Get certificate by ID - NO AUTH REQUIRED
-router.get('/:id', getCertificateById);
-
-// Download certificate - NO AUTH REQUIRED
-router.get('/:id/download', downloadCertificate);
-
-// Revoke certificate - NO AUTH REQUIRED
-router.put('/:id/revoke', revokeCertificate);
-
-// Student certificates - NO AUTH REQUIRED
+// Student certificates
 router.get('/student/:email', async (req, res) => {
   try {
     const { email } = req.params;
@@ -75,12 +83,32 @@ router.get('/verify/:verification_code', async (req, res) => {
   try {
     const cert = await Certificate.findOne({ verification_code: req.params.verification_code });
     if (!cert || cert.status !== 'issued') {
-      return res.status(404).json({ valid: false });
+      return res.status(404).json({ 
+        valid: false, 
+        message: 'Certificate not found or revoked' 
+      });
     }
-    res.json({ valid: true, certificate: cert });
+    res.json({ 
+      valid: true, 
+      certificate: cert 
+    });
   } catch (err) {
-    res.status(500).json({ valid: false });
+    console.error('Verification error:', err);
+    res.status(500).json({ 
+      valid: false, 
+      error: err.message 
+    });
   }
 });
+
+// ⚠️ DYNAMIC ROUTES - MUST COME LAST
+// Get certificate by ID
+router.get('/:id', getCertificateById);
+
+// Download certificate
+router.get('/:id/download', downloadCertificate);
+
+// Revoke certificate
+router.put('/:id/revoke', revokeCertificate);
 
 module.exports = router;
