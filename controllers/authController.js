@@ -1,11 +1,9 @@
 const auth = require('../models/authdata');
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
-// Add to authController.js
 const Teacher = require('../models/adminadddata');
 const PersonalInfo = require('../models/formdatapersonal');
 
-// Check if user is authorized teacher
 // Check if user is authorized teacher
 const checkTeacherAuthorization = async (req, res) => {
   try {
@@ -43,7 +41,6 @@ const checkTeacherAuthorization = async (req, res) => {
       isActive: user.isActive
     });
 
-    // ✅ ADD THESE CRITICAL CHECKS:
     if (user.role !== 'teacher') {
       console.log('❌ [9] FAIL: User role is not teacher. Role is:', user.role);
       return res.json({

@@ -5,11 +5,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// IMPORT THESE — THIS WAS MISSING!!!
-const Certificate = require('../models/Certificatemodel');  // ← THIS LINE WAS MISSING!
-const { adminAuth } = require('../middlewares/adminauthMiddleware');
+const Certificate = require('../models/Certificatemodel');
+// REMOVE adminAuth import - we won't use it
+// const { adminAuth } = require('../middlewares/adminauthMiddleware');
 
-// Multer config (built-in)
+// Multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = 'uploads/certificates/';
@@ -39,35 +39,36 @@ const {
   revokeCertificate
 } = require('../controllers/Certificatecontroller');
 
-// ==================== PUBLIC ROUTE - STUDENT CAN ACCESS ====================
-// THIS WORKS NOW — NO 403, NO 500!
+// ==================== PUBLIC ROUTES (No Auth Required) ====================
+
+// Upload certificate - NO AUTH REQUIRED
+router.post('/upload', upload.single('certificate_file'), uploadCertificate);
+
+// Get all certificates - NO AUTH REQUIRED
+router.get('/', getAllCertificates);
+
+// Get certificate by ID - NO AUTH REQUIRED
+router.get('/:id', getCertificateById);
+
+// Download certificate - NO AUTH REQUIRED
+router.get('/:id/download', downloadCertificate);
+
+// Revoke certificate - NO AUTH REQUIRED
+router.put('/:id/revoke', revokeCertificate);
+
+// Student certificates - NO AUTH REQUIRED
 router.get('/student/:email', async (req, res) => {
   try {
     const { email } = req.params;
-
     const certificates = await Certificate.find({ student_email: email })
       .select('course_title issue_date certificate_id verification_code certificate_file student_name')
       .sort({ issue_date: -1 });
-
-    res.json({
-      success: true,
-      data: certificates || []
-    });
+    res.json({ success: true, data: certificates || [] });
   } catch (error) {
     console.error('Error fetching student certificates:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Server error'
-    });
+    res.status(500).json({ success: false, error: 'Server error' });
   }
 });
-
-// ==================== ADMIN ROUTES ====================
-router.post('/upload', adminAuth, upload.single('certificate_file'), uploadCertificate);
-router.get('/', adminAuth, getAllCertificates);
-router.get('/:id', adminAuth, getCertificateById);
-router.get('/:id/download' , downloadCertificate);
-router.put('/:id/revoke', adminAuth, revokeCertificate);
 
 // Public verify route
 router.get('/verify/:verification_code', async (req, res) => {

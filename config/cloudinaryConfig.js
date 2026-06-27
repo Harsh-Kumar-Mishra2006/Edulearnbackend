@@ -27,7 +27,6 @@ const configureCloudinary = () => {
   if (missingVars.length > 0) {
     console.error('❌ MISSING CLOUDINARY CREDENTIALS:', missingVars);
     
-    // Don't use fallback values in production
     if (process.env.NODE_ENV === 'production') {
       throw new Error(`Missing Cloudinary credentials: ${missingVars.join(', ')}`);
     } else {
