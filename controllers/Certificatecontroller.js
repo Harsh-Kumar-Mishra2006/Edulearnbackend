@@ -3,14 +3,13 @@ const Auth = require('../models/authdata');
 const fs = require('fs');
 const path = require('path');
 
-// ============ UPLOAD CERTIFICATE ============
 const uploadCertificate = async (req, res) => {
   console.log('📤 Upload request received');
   console.log('📋 Body:', req.body);
   console.log('📎 File:', req.file);
 
   try {
-    const { student_email, course_title, completion_date } = req.body;
+    const { student_email, course_title, completion_date } = req.body;s
 
     // Validate required fields
     if (!student_email || !course_title || !completion_date) {
@@ -19,7 +18,7 @@ const uploadCertificate = async (req, res) => {
       }
       return res.status(400).json({ 
         success: false, 
-        error: 'All fields are required: student_email, course_title, completion_date' 
+        error: 'All fields are required' 
       });
     }
 
@@ -30,6 +29,12 @@ const uploadCertificate = async (req, res) => {
       });
     }
 
+    // ✅ REMOVE THIS ADMIN CHECK
+    // if (!req.admin) {
+    //   fs.unlinkSync(req.file.path);
+    //   return res.status(401).json({ success: false, error: 'Unauthorized' });
+    // }
+
     // Find student by email
     const student = await Auth.findOne({ email: student_email });
     if (!student) {
@@ -38,7 +43,7 @@ const uploadCertificate = async (req, res) => {
       }
       return res.status(404).json({ 
         success: false, 
-        error: 'Student not found with this email' 
+        error: 'Student not found' 
       });
     }
 
@@ -49,7 +54,7 @@ const uploadCertificate = async (req, res) => {
       student_email: student.email,
       course_title: course_title.trim(),
       completion_date: new Date(completion_date),
-      issuer_name: 'Admin', // Default issuer name
+      issuer_name: 'Admin',
       certificate_file: {
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -62,15 +67,10 @@ const uploadCertificate = async (req, res) => {
     await certificate.save();
     console.log('✅ Certificate saved:', certificate._id);
 
-    // Get populated certificate
-    const populatedCertificate = await Certificate.findById(certificate._id)
-      .populate('student_id', 'name email phone')
-      .populate('issued_by', 'name email');
-
     res.status(201).json({
       success: true,
       message: 'Certificate uploaded successfully!',
-      data: populatedCertificate
+      data: certificate
     });
 
   } catch (error) {
@@ -84,7 +84,6 @@ const uploadCertificate = async (req, res) => {
     });
   }
 };
-
 // ============ GET ALL CERTIFICATES ============
 const getAllCertificates = async (req, res) => {
   try {
