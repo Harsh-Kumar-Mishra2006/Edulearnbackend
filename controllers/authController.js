@@ -305,7 +305,6 @@ const login = async (req, res) => {
     });
   }
 };
-// In authController.js - Update getProfile function
 // In authController.js - getProfile function
 const getProfile = async (req, res) => {
   try {
