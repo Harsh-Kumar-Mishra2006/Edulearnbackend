@@ -1,3 +1,5 @@
+//models/adminadddata.js
+
 const mongoose = require('mongoose');
 
 const teacherSchema = new mongoose.Schema({
