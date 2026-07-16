@@ -1,3 +1,4 @@
+//questionController
 const Question = require('../models/questionModel');
 const QuizAttempt = require('../models/quizAttemptModel');
 const CourseMaterial = require('../models/courseMaterialdata');
